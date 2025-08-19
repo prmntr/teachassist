@@ -71,7 +71,7 @@ const CourseViewScreen = () => {
       if (cachedHtml) {
         setCourseHtml(cachedHtml);
         setIsLoading(false);
-        setMessage("Course data loaded from cache.");
+        setMessage(`Course data loaded ${new Date().toLocaleTimeString()}`);
       } else {
         setMessage(
           `No cached data for course ${subjectID}. Fetching from network...`
