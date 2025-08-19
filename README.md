@@ -22,7 +22,12 @@ TeachAssist provides students with an open source streamlined mobile experience 
 
 ## Screenshots
 
-*Coming soon*
+![TeachAssist Picture 1](https://ibb.co/ch93LQVQ)
+![Stay Informed](https://ibb.co/Ngz3LNnx)
+![Stay Intelligent](https://ibb.co/My8wkGYD)
+![Stay Secure](https://ibb.co/1YSjYkXj)
+![Stay Private](https://ibb.co/6RNn3Yvz)
+![Stay Connected](https://ibb.co/s9Mbcg2h)
 
 ## Privacy & Security
 
