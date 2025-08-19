@@ -1,43 +1,109 @@
-import { Tabs } from 'expo-router';
-import React from 'react';
-import { Platform } from 'react-native';
+import { Tabs } from "expo-router";
+import { Image, View } from "react-native";
+import * as Haptics from "expo-haptics";
 
-import { HapticTab } from '@/components/HapticTab';
-import { IconSymbol } from '@/components/ui/IconSymbol';
-import TabBarBackground from '@/components/ui/TabBarBackground';
-import { Colors } from '@/constants/Colors';
-import { useColorScheme } from '@/hooks/useColorScheme';
+
+// todo add hollow icon sources
+type TabIconProps = {
+  source: any;
+  hollowSource: any;
+  title: string;
+  width: string;
+  focused: boolean;
+};
+
+
+const TabIcon = ({ source, hollowSource, width, focused }: TabIconProps) => {
+  if (focused) {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    return (
+      <View className="flex-col items-center mt-7 min-w-[112px] scale-120 transition duration-200">
+        <Image
+          source={source}
+          className={width}
+          tintColor="#27b1fa"
+          resizeMode="contain"
+        />
+      </View>
+    );
+  } else {
+    return (
+      <View className="size-full justify-center items-center mt-7 min-w-[112px]">
+        <Image
+          source={hollowSource}
+          className={width}
+          tintColor="#5d5d5d"
+          resizeMode="contain"
+        />
+      </View>
+    );
+  }
+};
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
-        headerShown: false,
-        tabBarButton: HapticTab,
-        tabBarBackground: TabBarBackground,
-        tabBarStyle: Platform.select({
-          ios: {
-            // Use a transparent background on iOS to show the blur effect
-            position: 'absolute',
-          },
-          default: {},
-        }),
-      }}>
+        tabBarShowLabel: false,
+        tabBarItemStyle: {
+          width: "100%",
+          height: "100%",
+          justifyContent: "center",
+        },
+        tabBarStyle: {
+          backgroundColor: "#161616",
+          overflow: "hidden",
+          borderColor: "#2a2a2a",
+          borderTopWidth: 2,
+        },
+      }}
+    >
       <Tabs.Screen
-        name="index"
+        name="courses"
         options={{
-          title: 'Home',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="house.fill" color={color} />,
+          title: "Courses",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              title="Courses"
+              source={require("../../assets/images/CoursesIcon.png")}
+              hollowSource={require("../../assets/images/CoursesIcon_Hollow.png")}
+              width="w-10"
+              focused={focused}
+            />
+          ),
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="guidance"
         options={{
-          title: 'Explore',
-          tabBarIcon: ({ color }) => <IconSymbol size={28} name="paperplane.fill" color={color} />,
+          title: "Guidance",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              source={require("../../assets/images/GuidanceIcon.png")}
+              hollowSource={require("../../assets/images/GuidanceIcon_Hollow.png")}
+              title="Guidance"
+              width="w-8"
+              focused={focused}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          headerShown: false,
+          tabBarIcon: ({ focused }) => (
+            <TabIcon
+              source={require("../../assets/images/ProfileIcon.png")}
+              hollowSource={require("../../assets/images/ProfileIcon_Hollow.png")}
+              title="Profile"
+              width="w-9"
+              focused={focused}
+            />
+          ),
         }}
       />
     </Tabs>

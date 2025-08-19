@@ -1,0 +1,9 @@
+TODO LIST
+
+- migrate from touchable to pressable
+- implement guidance
+    - find out what a schoolid is; yrdsb specific?
+- get overall course mark; should be simple
+- custom assignments
+- course charts
+- why is gluestack not working it worked on all my other projects

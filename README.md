@@ -1,50 +1,119 @@
-# Welcome to your Expo app 👋
+# TeachAssist
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A modern mobile app for the YRDSB TeachAssist portal, built with React Native.
 
-## Get started
+## Overview
 
-1. Install dependencies
+TeachAssist provides students with an open source streamlined mobile experience to access their academic information from the York Region District School Board's TeachAssist portal (ta.yrdsb.ca). View your grades, track performance over time, and get assignment feedback - all in a clean, native mobile interface.
 
+## Features
+
+### Current Features
+- 📱 **Mobile-Optimized Interface** - Clean, intuitive design built specifically for mobile devices
+- 📊 **Grade Tracking** - View current marks and performance across all classes
+- 📝 **Assignment Feedback** - Access detailed feedback on completed assignments
+- 🔐 **Secure Login** - End-to-end encryption with YRDSB credentials
+- ⚡ **Fast Performance** - Quick access to your academic data
+
+### Coming Soon
+- 📅 **Appointment Booking** - Schedule guidance appointments directly from the app
+- 🔮 **Performance Prediction** - AI-powered insights to predict future academic performance
+- 📈 **Trend Analysis** - Track your progress over time with detailed analytics
+
+## Screenshots
+
+*Coming soon*
+
+## Privacy & Security
+
+- **No Data Storage**: Your credentials and academic data stay private between you, your device, and TeachAssist
+- **Direct Connection**: The app connects directly to the official YRDSB TeachAssist portal
+- **Local Processing**: All data processing happens locally on your device
+- **Secure Authentication**: Securely authenticates with the YRDSB portal
+
+## Installation
+
+### For Users
+The app will be available on the Google Play Store. iOS support is being considered.
+
+### For Developers
+
+#### Prerequisites
+- Node.js (v16 or higher)
+- npm or yarn
+- Expo CLI
+- iOS Simulator (for iOS development), Android Studio (for Android development), or an iOS or Android device
+
+#### Setup
+1. Clone the repository:
    ```bash
-   npm install
+   git clone https://github.com/prmntr/teachassist.git
+   cd teachassist
    ```
 
-2. Start the app
+2. Install dependencies:
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
 
+3. Start the development server:
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+4. Run on your preferred platform:
+   - **iOS**: Press `i` in the terminal or scan the QR code with your iPhone camera
+   - **Android**: Press `a` in the terminal or scan the QR code with the Expo Go app
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Tech Stack
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+- **Framework**: React Native
+- **Platform**: Expo
+- **Language**: JavaScript/TypeScript
+- **Authentication**: Secure credential handling for YRDSB portal
+- **API Integration**: Custom wrapper for ta.yrdsb.ca
 
-## Get a fresh project
+## Contributing
 
-When you're ready, run:
+Contributions are welcomed. Here's how you can help:
 
-```bash
-npm run reset-project
-```
+1. **Fork the repository**
+2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
+3. **Make your changes**: Implement your feature or fix
+4. **Test thoroughly**: Ensure your changes work as expected
+5. **Commit your changes**: `git commit -m 'Add amazing feature'`
+6. **Push to the branch**: `git push origin feature/amazing-feature`
+7. **Open a Pull Request**: Describe your changes and their benefits
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+### Development Guidelines
+- Follow React Native and Expo best practices
+- Write clear, commented code
+- Test on both iOS and Android platforms
+- Update documentation for any new features
 
-## Learn more
+## Disclaimer
 
-To learn more about developing your project with Expo, look at the following resources:
+This app is an unofficial mobile client for the YRDSB TeachAssist portal. It is not affiliated with, endorsed by, or officially connected to the York Region District School Board. All academic data is retrieved directly from the official ta.yrdsb.ca portal. I am not responsible for any information displayed on the app.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## Support
 
-## Join the community
+If you encounter any issues or have questions:
+- 🐛 **Bug Reports**: Open an issue on GitHub
+- 💡 **Feature Requests**: Submit an issue with the "enhancement" label
+- 📧 **Contact**: [Google Forms](https://forms.gle/BECBr8LqgtnzzHqS6)
 
-Join our community of developers creating universal apps.
+## License
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- York Region District School Board for providing the TeachAssist portal
+- The React Native and Expo communities for their excellent documentation and tools
+- All contributors who help make this app better
+
+---
+
+**Made with ❤️ for YRDSB students**
