@@ -141,7 +141,7 @@ const InitialRoute = () => {
         </View>
       </TouchableOpacity>
       <Text className="text-gray-600 text-lg absolute bottom-4">
-        0.1.0-alpha.1
+        0.1.1
       </Text>
     </View>
   );

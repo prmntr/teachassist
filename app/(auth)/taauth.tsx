@@ -199,6 +199,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         if (savedUsername?.includes("123456789")) {
           const errorMessage = "You are using a test account! No appointments are currently available.";
           console.warn(errorMessage);
+          onError?.(errorMessage);
           onLoadingChange?.(false);
         } else {
           const errorMessage = "taauth: invalid parameters or no saved session";

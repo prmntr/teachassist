@@ -64,7 +64,7 @@ const SignInScreen = () => {
 
   useEffect(() => {
     Alert.alert("Hey there!", `Are you a tester? Use the placeholder username and password '123456789' and 'password' to test the app!`)
-  });
+  }, []);
 
   return (
     <View className="flex-1 justify-center items-center bg-1 px-6">

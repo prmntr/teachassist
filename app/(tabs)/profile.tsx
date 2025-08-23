@@ -17,7 +17,7 @@ const ProfileScreen = () => {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const appVersion = "0.1.0-alpha.1"; //* update w/ app.json
+  const appVersion = "0.1.1"; //* update w/ app.json
 
   const [userName, setUserName] = useState<string | null>(null);
   const [passWord, setPassWord] = useState<string | null>(null);
