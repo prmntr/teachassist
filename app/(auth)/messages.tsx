@@ -26,7 +26,7 @@ const Onboarding = () => {
         <Text className="text-4xl font-bold text-appwhite mb-10">
           Before we Begin...
         </Text>
-        <View className="ml-10">
+        <View className="px-10">
           <Text className="text-baccent text-3xl font-bold mb-6">
             Privacy First {"\n"}
             <Text className="text-appwhite text-lg font-normal">

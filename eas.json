@@ -7,9 +7,13 @@
     "preview": {
       "distribution": "internal",
       "channel": "preview",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+            "buildType": "app-bundle"
+          }
     },
     "production": {
+      
       "distribution": "store",
       "channel": "production",
       "autoIncrement": true

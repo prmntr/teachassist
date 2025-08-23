@@ -1,7 +1,15 @@
 import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
-import { useState } from "react";
-import { ActivityIndicator, Text, TextInput, View, TouchableOpacity, Image } from "react-native";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import TeachAssistAuthFetcher from "../(auth)/taauth";
 
 // Sign in screen
@@ -54,6 +62,10 @@ const SignInScreen = () => {
     setIsLoading(loading);
   };
 
+  useEffect(() => {
+    Alert.alert("Hey there!", `Are you a tester? Use the placeholder username and password '123456789' and 'password' to test the app!`)
+  });
+
   return (
     <View className="flex-1 justify-center items-center bg-1 px-6">
       <TouchableOpacity
@@ -64,11 +76,11 @@ const SignInScreen = () => {
         }}
       >
         <Image
-                  className="w-8 h-8"
-                  style={{ tintColor: "#edebea" }}
-                  source={require("../../assets/images/arrow-icon-left.png")}
-                />
-                <Text className="text-white font-semibold text-lg">Back</Text>
+          className="w-8 h-8"
+          style={{ tintColor: "#edebea" }}
+          source={require("../../assets/images/arrow-icon-left.png")}
+        />
+        <Text className="text-white font-semibold text-lg">Back</Text>
       </TouchableOpacity>
       <Text className="text-4xl font-bold text-white mb-2 text-center">
         Sign in to <Text className="text-baccent">TeachAssist</Text>
@@ -105,13 +117,24 @@ const SignInScreen = () => {
         sponsored, endorsed by, or affiliated with YRDSB or the TeachAssist
         Foundation. Use at your own risk.*/}
         By using this app, you agree to the TeachAssist{" \n"}
-        <Link href="https://prmntr.com/teachassist/tos" className="underline text-baccent">Terms of Service</Link>{" "}
+        <Link
+          href="https://prmntr.com/teachassist/tos"
+          className="underline text-baccent"
+        >
+          Terms of Service
+        </Link>{" "}
         and{" "}
-        <Link href="https://prmntr.com/teachassist/privacy" className="underline text-baccent">Privacy policy</Link>.
+        <Link
+          href="https://prmntr.com/teachassist/privacy"
+          className="underline text-baccent"
+        >
+          Privacy policy
+        </Link>
+        .
       </Text>
       <TouchableOpacity
         disabled={isLoading}
-        className="w-full bg-baccent text-white font-bold text-2xl text-center rounded-lg px-4 py-2 mb-4"
+        className="w-full bg-baccent text-center rounded-lg px-4 py-2 mb-3"
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           handleLogin();
@@ -119,6 +142,20 @@ const SignInScreen = () => {
       >
         <Text className="text-white font-bold text-2xl text-center">
           Sign In
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        className="text-2xl text-center rounded-lg"
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          Alert.alert(
+            "Try these steps",
+            `1. Try disabling your VPN; TeachAssist is only available to YRDSB students in Canada; we're working on a fix.\n\n2. Check your internet connection.\n\n3. Check the play store for any updates.`
+          );
+        }}
+      >
+        <Text className="text-appwhite text-md text-center underline underline-offset-1">
+          Trouble signing in?
         </Text>
       </TouchableOpacity>
 

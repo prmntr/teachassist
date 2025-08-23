@@ -176,7 +176,7 @@ const ProfileScreen = () => {
               <View className="flex-row justify-between items-center">
                 <View>
                   <Text className="text-appwhite text-lg font-semibold">
-                    Appearance (coming soon)
+                    Appearance
                   </Text>
                   <Text className="text-appwhite/60 text-sm mt-1">
                     Dark Theme
@@ -234,6 +234,12 @@ const ProfileScreen = () => {
                 className="text-gray-300 mr-2 underline"
               >
                 Terms of Service
+              </Link>
+              <Link
+                href="https://github.com/prmntr/teachassist"
+                className="text-gray-300 mr-2 underline"
+              >
+                Source Code
               </Link>
               <Link href="/credits" className="text-gray-300 underline">
                 Credits

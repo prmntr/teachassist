@@ -107,7 +107,7 @@ const CourseViewScreen = () => {
         />
         <Text className="text-white font-semibold text-lg">Back</Text>
       </TouchableOpacity>
-      <ScrollView>
+      <ScrollView showsVerticalScrollIndicator={false}>
         <View className="pt-20 px-5 pb-10 mt-10">
           <Text className="text-center text-baccent text-4xl font-bold mb-2">
             {isLoading && !courseHtml ? "Loading..." : courseName}

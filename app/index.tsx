@@ -90,7 +90,7 @@ const InitialRoute = () => {
       <View className="flex-1 items-center justify-center bg-1">
         <Image
           source={require("../assets/images/transparent_ta_icon.png")}
-          className="w-22 h-19 mb-6 object-fill"
+          className="w-22 h-21 mb-6 object-fill"
         />
         <Text className="text-5xl font-bold text-appwhite mb-4">
           TeachAssist

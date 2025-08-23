@@ -1,7 +1,7 @@
+import * as SecureStore from "expo-secure-store";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
-import * as SecureStore from "expo-secure-store";
 
 // wrapper for expo-secure-store
 export class SecureStorage {
@@ -35,6 +35,8 @@ interface TeachAssistAuthFetcherProps {
   fetchWithCookies?: boolean;
   // getting id
   subjectID?: number | null;
+  // getting guidance w/ date
+  getGuidance?: Date;
 
   onResult: (result: string) => void;
   onError?: (error: string) => void;
@@ -52,6 +54,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   loginParams,
   fetchWithCookies,
   subjectID,
+  getGuidance,
   onResult,
   onError,
   onLoadingChange,
@@ -125,7 +128,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     }
   };
 
-  // initialize everything
+  // initialize everything; load in all the vals from secure storage and then setTarget
   useEffect(() => {
     const initializeFetcher = async () => {
       onLoadingChange?.(true);
@@ -135,7 +138,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       const savedSessionToken = await SecureStorage.load("ta_session_token");
 
       // check for main courses page html first if not logging in
-      if (!loginParams && !subjectID) {
+      if (!loginParams && !subjectID && !getGuidance) {
         const cachedMainHtml = await SecureStorage.load("courses_main_html");
         if (cachedMainHtml) {
           onResult(cachedMainHtml);
@@ -150,8 +153,20 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         const { username, password } = loginParams;
         const encodedUsername = encodeURIComponent(username);
         const encodedPassword = encodeURIComponent(password);
-        const url = `https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
-        setTargetUrl(url);
+        // example login
+        if (encodedPassword === "password" && encodedUsername === "123456789") {
+          await SecureStorage.save("ta_username", loginParams.username);
+          await SecureStorage.save("ta_password", loginParams.password);
+          await SecureStorage.save("ta_student_id", "");
+          await SecureStorage.save("ta_session_token", "");
+          await SecureStorage.save("courses_main_html", "");
+          await SecureStorage.save("school_id", "0");
+          onLoadingChange?.(false);
+          onResult("Login Success");
+        } else {
+          const url = `https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
+          setTargetUrl(url);
+        }
       } else if (
         fetchWithCookies &&
         savedStudentId &&
@@ -165,11 +180,32 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         );
         const url = `https://ta.yrdsb.ca/live/students/viewReport.php?subject_id=${subjectID}&student_id=${savedStudentId}`;
         setTargetUrl(url);
+      } else if (getGuidance && savedStudentId && savedSessionToken) {
+        const savedSchoolId = await SecureStorage.load("school_id");
+        if (savedSchoolId) {
+          const schoolId = JSON.parse(savedSchoolId);
+          const guidanceDate = getGuidance.toISOString().slice(0, 10);
+          console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
+          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${schoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`;
+          setTargetUrl(url);
+        } else {
+          const errorMsg = "No School ID found";
+          console.log(errorMsg);
+          onError?.(errorMsg);
+          onLoadingChange?.(false);
+        }
       } else {
-        const errorMessage = "taauth: Invalid parameters or no saved session.";
-        console.error(errorMessage);
-        onError?.(errorMessage);
-        onLoadingChange?.(false);
+        const savedUsername = await SecureStorage.load("ta_username");
+        if (savedUsername?.includes("123456789")) {
+          const errorMessage = "You are using a test account! No appointments are currently available.";
+          console.warn(errorMessage);
+          onLoadingChange?.(false);
+        } else {
+          const errorMessage = "taauth: invalid parameters or no saved session";
+          console.error(errorMessage);
+          onError?.(errorMessage);
+          onLoadingChange?.(false);
+        }
       }
     };
 
@@ -178,6 +214,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     loginParams,
     fetchWithCookies,
     subjectID,
+    getGuidance,
     onResult,
     onError,
     onLoadingChange,
@@ -197,6 +234,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   `;
 
   // maybe refactor
+  // the webview has fetched whatever html was requested, handle it here
   const handleMessage = async (event: WebViewMessageEvent) => {
     try {
       const message: WebViewDataMessage = JSON.parse(event.nativeEvent.data);
@@ -212,7 +250,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           } else if (html.toLowerCase().includes("student reports")) {
             console.log("taauth: Login successful.");
 
-            // parse using ai generated regex for courses
+            // parse using regex for courses
             const allDivs = html.match(
               /<div class="green_border_message box">([\s\S]*?)<\/div>/g
             );
@@ -235,8 +273,13 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
               }
             }
 
+            // get school id for guidance
+            const schoolId = html.match(/school_id=(\d+)/)?.[1];
+
+            console.log("School id: " + schoolId);
             console.log("Course response: " + courseArr);
             const coursesHtmlString = JSON.stringify(courseArr);
+            const schoolIDString = JSON.stringify(schoolId);
 
             const cookiePairs = cookies.split("; ").map((c) => c.split("="));
             const studentId =
@@ -252,6 +295,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
               await SecureStorage.save("ta_student_id", studentId);
               await SecureStorage.save("ta_session_token", sessionToken);
               await SecureStorage.save("courses_main_html", coursesHtmlString);
+              await SecureStorage.save("school_id", schoolIDString);
 
               // extract course IDs from the courses HTML and fetch all of them
               const courseIds = extractCourseIds(coursesHtmlString);
@@ -261,9 +305,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
                   `taauth: Found ${courseIds.length} course ids: ${courseIds.join(", ")}`
                 );
                 await fetchMultipleCourses(courseIds, cookies, studentId);
-                console.log(
-                  "taauth: everything stored securely"
-                );
+                console.log("taauth: everything stored securely");
               } else {
                 console.log("taauth: no course ids were found.");
               }
@@ -278,12 +320,20 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             onResult("Login Failed: Unexpected content. Contact support!");
           }
         } else if (fetchWithCookies) {
-          // This block is for fetching course data with cookies
           if (html.toLowerCase().includes("log in")) {
             onResult("Login Failed: Session expired or invalid cookies.");
           } else {
             onResult(html);
             console.log("taauth: html fetched successfully with cookies");
+          }
+        } else if (getGuidance) {
+          if (html.toLowerCase().includes("log in")) {
+            onResult("Retrevial failed : Session expired or invalid cookies.");
+          } else if (html.includes("NOT A SCHOOL DAY")) {
+            onResult("NOT A SCHOOL DAY");
+          } else {
+            onResult(html);
+            console.log("taauth: guidance html fetched successfully");
           }
         }
       } else if (message.type === "error") {
@@ -329,7 +379,9 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           onError?.(
             `taauth: WebView navigation error: ${nativeEvent.description}`
           );
-          onResult("Failed to reach TeachAssist servers! Check your internet and try again.");
+          onResult(
+            "Failed to reach TeachAssist servers! Check your internet and try again."
+          );
           onLoadingChange?.(false);
         }}
       />

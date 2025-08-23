@@ -7,3 +7,8 @@ TODO LIST
 - custom assignments
 - course charts
 - why is gluestack not working it worked on all my other projects
+
+- make haptic feedback more pronounced too soft
+- APP ICON LOOKS LIKE SHIT
+- edit error messages
+- vpn

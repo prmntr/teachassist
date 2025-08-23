@@ -1,25 +1,25 @@
-import { useRouter, Link } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   ScrollView,
   Text,
-  View,
-  Image,
   TouchableOpacity,
-  Alert,
+  View,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
-import { CourseInfoBox } from "../(components)/QuickCourse";
 import Messages from "../(components)/Messages";
+import { CourseInfoBox } from "../(components)/QuickCourse";
 
 // Retrieve each course
-
 
 const CoursesScreen = () => {
   const [coursesHtml, setCoursesHtml] = useState<string | null>(null);
   const [cachedHtml, setCachedHtml] = useState<{ [key: string]: string }>({});
-  const [courseIds, setCourseIds] = useState<string[]>([]);
+  let [courseIds, setCourseIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("Loading...");
   const [shouldRefreshWithLogin, setShouldRefreshWithLogin] = useState(false);
@@ -58,7 +58,7 @@ const CoursesScreen = () => {
     if (result.includes("Login Failed")) {
       setMessage("Session expired. Please log in again.");
       router.replace("/signin");
-    } else if (result === "Login Success") {
+    } else if (result.includes("Login Success")) {
       // after successful login, reload the data
       setMessage("Login successful! Loading courses...");
       setShouldRefreshWithLogin(false);
@@ -122,11 +122,19 @@ const CoursesScreen = () => {
 
       setIsLoading(false);
     } else {
-      setMessage(
-        "Stored courses not found. Trying again..." // reauth with cookies
-      );
-      console.warn("Cookies not found");
-      setIsLoading(true);
+      const savedUsername = await SecureStorage.load("ta_username");
+      if (savedUsername?.includes("123456789")) {
+        setMessage("This is a test account. No courses are available.");
+        setCourseIds([]);
+        setCoursesHtml("test_account"); // set something random
+        setIsLoading(false);
+      } else {
+        setMessage(
+          "Stored courses not found. Trying again..." // reauth with cookies
+        );
+        console.warn("Cookies not found");
+        setIsLoading(true);
+      }
     }
   };
 
@@ -159,6 +167,11 @@ const CoursesScreen = () => {
       router.replace("/signin");
       Alert.alert("Username and password not found. Please log in again.");
     }
+    if(savedUsername === "123456789"){
+      console.log(savedUsername);
+      setCourseIds([]);
+      setCoursesHtml("test_account");
+    }
   };
 
   useEffect(() => {
@@ -170,7 +183,10 @@ const CoursesScreen = () => {
       <View className="flex-row items-center justify-between mt-18">
         <Text className="text-5xl font-semibold text-appwhite">My Courses</Text>
         <TouchableOpacity
-          onPress={handleRefresh}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            handleRefresh();
+          }}
           className="bg-baccent/20 border-baccent/30 border rounded-lg px-3 py-2"
           disabled={isLoading}
         >
