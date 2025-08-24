@@ -82,12 +82,12 @@ const SignInScreen = () => {
         />
         <Text className="text-white font-semibold text-lg">Back</Text>
       </TouchableOpacity>
-      <Text className="text-4xl font-bold text-white mb-2 text-center">
+      <Text className="text-4xl font-bold text-appwhite mb-2 text-center">
         Sign in to <Text className="text-baccent">TeachAssist</Text>
       </Text>
       {/* conditional render */}
       {message ? (
-        <Text className="text-white mb-4 mt-2 text-md text-center bg-danger rounded-lg w-full py-2">
+        <Text className="text-appwhite mb-4 mt-2 text-md text-center bg-danger rounded-lg w-full py-2">
           {message}
         </Text>
       ) : (

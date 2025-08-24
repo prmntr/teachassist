@@ -12,3 +12,9 @@ TODO LIST
 - APP ICON LOOKS LIKE SHIT
 - edit error messages
 - vpn
+
+- fix guidance is 1 day ahead
+
+- use safeareas
+
+- flag is // 1

@@ -61,6 +61,7 @@ const CoursesScreen = () => {
     } else if (result.includes("Login Success")) {
       // after successful login, reload the data
       setMessage("Login successful! Loading courses...");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShouldRefreshWithLogin(false);
       loadHtmlOrFetch();
     } else {
@@ -163,11 +164,12 @@ const CoursesScreen = () => {
         password: savedPassword,
       });
       setShouldRefreshWithLogin(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else {
       router.replace("/signin");
       Alert.alert("Username and password not found. Please log in again.");
     }
-    if(savedUsername === "123456789"){
+    if (savedUsername === "123456789") {
       console.log(savedUsername);
       setCourseIds([]);
       setCoursesHtml("test_account");

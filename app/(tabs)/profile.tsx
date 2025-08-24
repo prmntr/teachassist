@@ -17,10 +17,11 @@ const ProfileScreen = () => {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const appVersion = "0.1.1"; //* update w/ app.json
+  const appVersion = "v0.1.2"; //* update w/ app.json
 
   const [userName, setUserName] = useState<string | null>(null);
   const [passWord, setPassWord] = useState<string | null>(null);
+  const [school, setSchool] = useState<string | null>(null);
 
   const getUser = async () => {
     const userName = await SecureStorage.load("ta_username");
@@ -34,9 +35,16 @@ const ProfileScreen = () => {
     return passWord;
   };
 
+  const getSchool = async () => {
+    const school = await SecureStorage.load("school_name");
+    setSchool(school);
+    return school;
+  };
+
   useEffect(() => {
     getUser();
     getPass();
+    getSchool();
   }, []);
 
   const handleNotificationToggle = async (value: boolean) => {
@@ -100,7 +108,7 @@ const ProfileScreen = () => {
           source={require("../../assets/images/mountain-background.webp")}
           className="w-full px-5 py-16 flex justify-center items-center overflow-hidden rounded-xl"
         >
-          <View className="bg-baccent/25 backdrop-blur-sm flex items-center py-6 px-15 rounded-2xl border border-white/10">
+          <View className="bg-baccent/25 backdrop-blur-sm flex items-center py-9 px-15 rounded-2xl border border-white/10">
             <Image
               source={require("../../assets/images/catalina.png")}
               className="w-32 h-32 rounded-2xl mb-4 border-2 border-white/20"
@@ -108,7 +116,7 @@ const ProfileScreen = () => {
             <Text className="text-3xl font-bold text-appwhite mb-1">
               {userName}
             </Text>
-            <Text className="text-appwhite/70 text-lg">YRDSB Student</Text>
+            <Text className="text-appwhite text-lg text-center">{school}</Text>
           </View>
         </ImageBackground>
 

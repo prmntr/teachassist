@@ -27,12 +27,12 @@ function Messages() {
     "Good to see you, ",
     "",
     "",
-    "hiii ",
+    "haii ",
   ];
 
   const postMessage = [
     "!",
-    "",
+    "!",
     "!",
     "?",
     "?",

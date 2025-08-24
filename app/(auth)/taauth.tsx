@@ -37,6 +37,8 @@ interface TeachAssistAuthFetcherProps {
   subjectID?: number | null;
   // getting guidance w/ date
   getGuidance?: Date;
+  // ADDED: booking appointment
+  bookAppointment?: string;
 
   onResult: (result: string) => void;
   onError?: (error: string) => void;
@@ -55,6 +57,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   fetchWithCookies,
   subjectID,
   getGuidance,
+  bookAppointment, // ADDED
   onResult,
   onError,
   onLoadingChange,
@@ -83,7 +86,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       try {
         // just in case extractor failed
         if (courseId.length !== 6 || !/^\d{6}$/.test(courseId)) {
-          console.warn(`taauth: Skipping invalid course ID: ${courseId}`);
+          console.warn(`taauth: skipping bad course ID ${courseId}`);
           // in case course id is invalid
           await SecureStorage.save(
             `course_${courseId}`,
@@ -118,13 +121,49 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           );
         }
       } catch (error) {
-        console.error(`taauth: Error fetching course ${courseId}:`, error);
+        console.error(`taauth: error fetching course ${courseId}:`, error);
         // give the user the error
         await SecureStorage.save(
           `course_${courseId}`,
           `<h2>Course ${courseId}</h2><div>Error loading course: ${error}</div>`
         );
       }
+    }
+  };
+
+  const fetchSchoolName = async (schoolId: string) => {
+    try {
+      console.log(`taauth: Fetching school name for school ID ${schoolId}`);
+      const calendarUrl = `https://ta.yrdsb.ca/live/students/calendar_full.php?school_id=${schoolId}`;
+
+      const response = await fetch(calendarUrl); // no cookies needed
+
+      if (response.ok) {
+        const calendarHtml = await response.text();
+        // Extract school name from first h1 tag
+        const h1Match = calendarHtml.match(/<h1[^>]*>(.*?)<\/h1>/i);
+        if (h1Match && h1Match[1]) {
+          const fullH1Text = h1Match[1].trim();
+          // Remove "School Full Calendar" suffix to get just the school name
+          const schoolName = fullH1Text
+            .replace(/\s+School Full Calendar$/i, "")
+            .trim();
+          console.log(`taauth: school name is ${schoolName}`);
+          await SecureStorage.save("school_name", schoolName);
+          return schoolName;
+        } else {
+          console.warn("taauth: Could not find h1 tag in calendar page");
+          return null;
+        }
+      } else {
+        console.warn(
+          `taauth: Failed to fetch calendar page, status: ${response.status}`
+        );
+        return null;
+      }
+    } catch (error) {
+      console.error("taauth: Error fetching school name:", error);
+      return null;
     }
   };
 
@@ -138,7 +177,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       const savedSessionToken = await SecureStorage.load("ta_session_token");
 
       // check for main courses page html first if not logging in
-      if (!loginParams && !subjectID && !getGuidance) {
+      if (!loginParams && !subjectID && !getGuidance && !bookAppointment) {
         const cachedMainHtml = await SecureStorage.load("courses_main_html");
         if (cachedMainHtml) {
           onResult(cachedMainHtml);
@@ -161,6 +200,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           await SecureStorage.save("ta_session_token", "");
           await SecureStorage.save("courses_main_html", "");
           await SecureStorage.save("school_id", "0");
+          await SecureStorage.save("school_name", "Example School");
           onLoadingChange?.(false);
           onResult("Login Success");
         } else {
@@ -183,10 +223,10 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       } else if (getGuidance && savedStudentId && savedSessionToken) {
         const savedSchoolId = await SecureStorage.load("school_id");
         if (savedSchoolId) {
-          const schoolId = JSON.parse(savedSchoolId);
+          // const schoolId = JSON.parse(savedSchoolId);
           const guidanceDate = getGuidance.toISOString().slice(0, 10);
-          console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
-          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${schoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`;
+          console.warn(`taauth: Fetching guidance for date ${guidanceDate}`);
+          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`; // 1
           setTargetUrl(url);
         } else {
           const errorMsg = "No School ID found";
@@ -194,10 +234,22 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           onError?.(errorMsg);
           onLoadingChange?.(false);
         }
+      } else if (bookAppointment && savedStudentId && savedSessionToken) {
+        // ADDED: Handle appointment booking
+        const decodedUrl = bookAppointment
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#x27;/g, "'");
+
+        console.log(`taauth: Booking appointment with URL: ${decodedUrl}`);
+        setTargetUrl(decodedUrl);
       } else {
         const savedUsername = await SecureStorage.load("ta_username");
         if (savedUsername?.includes("123456789")) {
-          const errorMessage = "You are using a test account! No appointments are currently available.";
+          const errorMessage =
+            "You are using a test account! No appointments are currently available.";
           console.warn(errorMessage);
           onError?.(errorMessage);
           onLoadingChange?.(false);
@@ -216,6 +268,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     fetchWithCookies,
     subjectID,
     getGuidance,
+    bookAppointment,
     onResult,
     onError,
     onLoadingChange,
@@ -289,15 +342,15 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
               cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
               null;
 
-            if (studentId && sessionToken) {
+            if (studentId && sessionToken && schoolId) {
               // save everything
               await SecureStorage.save("ta_username", loginParams.username);
               await SecureStorage.save("ta_password", loginParams.password);
               await SecureStorage.save("ta_student_id", studentId);
               await SecureStorage.save("ta_session_token", sessionToken);
               await SecureStorage.save("courses_main_html", coursesHtmlString);
-              await SecureStorage.save("school_id", schoolIDString);
-
+              await SecureStorage.save("school_id", schoolIDString); // 1
+              await fetchSchoolName(schoolId); // get here b/c relies on school id
               // extract course IDs from the courses HTML and fetch all of them
               const courseIds = extractCourseIds(coursesHtmlString);
 
@@ -335,6 +388,21 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           } else {
             onResult(html);
             console.log("taauth: guidance html fetched successfully");
+          }
+        } else if (bookAppointment) {
+          // ADDED: Handle appointment booking response
+          if (html.toLowerCase().includes("log in")) {
+            onResult("Booking Failed: Session expired or invalid cookies.");
+          } else if (html.toLowerCase().includes("cancel")) {
+            console.log(
+              "taauth: appointment booking successful"
+            );
+            onResult("Appointment booked successfully!");
+          } else {
+            console.log(
+              "taauth: appointment booking failed - no 'cancel' found in HTML"
+            );
+            onResult("Failed to book appointment. Please try again.");
           }
         }
       } else if (message.type === "error") {

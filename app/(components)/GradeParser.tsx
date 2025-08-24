@@ -130,7 +130,7 @@ export const GradesParser = ({ htmlContent }: { htmlContent: string }) => {
         },
       };
 
-      // Find the parent row of this assignment cell
+      // find the parent row of this assignment cell
       const parentRow = assignmentCell.parent;
       if (!parentRow) continue;
 
@@ -140,7 +140,7 @@ export const GradesParser = ({ htmlContent }: { htmlContent: string }) => {
         parentRow.children
       );
 
-      // Process each grade cell by looking at its background color
+      // do each cell by bg colour
       for (const cell of rowCells) {
         const bgcolor = cell.attribs?.bgcolor?.toLowerCase().replace("#", "");
         if (!bgcolor || !categoryMap[bgcolor]) continue;
@@ -278,7 +278,7 @@ export const GradesParser = ({ htmlContent }: { htmlContent: string }) => {
               <Text className="text-baccent/80 text-xs font-medium ">
                 Overall
               </Text>
-              <Text className="text-white text-2xl font-bold">
+              <Text className="text-appwhite text-2xl font-bold">
                 {calculateOverallMark(item.categories)}%
               </Text>
             </View>

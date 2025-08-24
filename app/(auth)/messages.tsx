@@ -62,7 +62,7 @@ const Onboarding = () => {
             router.replace("/signin");
           }}
         >
-          <Text className="text-white font-semibold text-3xl bg-baccent px-5 py-3 rounded-xl shadow-md mt-10">
+          <Text className="text-appwhite font-semibold text-3xl bg-baccent px-5 py-3 rounded-xl shadow-md mt-10">
             Got it
           </Text>
         </TouchableOpacity>
