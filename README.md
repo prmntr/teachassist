@@ -27,6 +27,7 @@ TeachAssist provides students with an open source streamlined mobile experience 
 <img src="https://i.ibb.co/MkHS67Q7/1.png" alt="TeachAssist: Helping you get ahead" width="200"/>
 <img src="https://i.ibb.co/mCH9c5ZB/2.png" alt="Stay Informed" width="200"/>
 <img src="https://i.ibb.co/rKb82cCG/3.png" alt="Stay Intelligent" width="200"/>
+<img src="https://i.ibb.co/PzZcr449/4.png" alt="Stay In Touch" width="200"/>
 <img src="https://i.ibb.co/fVcLVsNL/4.png" alt="Stay Secure" width="200"/>
 <img src="https://i.ibb.co/0jQDgqBT/5.png" alt="Stay Private" width="200"/>
 <img src="https://i.ibb.co/9HCcBpNJ/6.png" alt="Stay Connected" width="200"/>
