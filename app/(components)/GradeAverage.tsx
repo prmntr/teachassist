@@ -71,7 +71,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
-      case "same":
+      case "up":
         return (
           <Image
             source={require("../../assets/images/caret-arrow-up.png")}
@@ -87,7 +87,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
             style={{ tintColor: "#27b1fa" }}
           />
         );
-      case "up":
+      case "same":
         return (
           <Image
             source={require("../../assets/images/caret-arrow-none.png")}
