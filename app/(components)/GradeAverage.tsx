@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { Text, View, Image } from "react-native";
-import CircularProgress from "react-native-circular-progress-indicator";
 import { SecureStorage } from "../(auth)/taauth";
 import { Course } from "./CourseParser";
 
@@ -197,22 +196,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   return (
     <View className="bg-3 rounded-xl p-4 mt-1 flex-row items-center justify-start">
       <View className="flex-column items-center justify-center mr-5">
-        <CircularProgress
-          value={gradeStats.currentAverage}
-          duration={400}
-          progressValueColor={"#27b1fa"}
-          radius={70}
-          inActiveStrokeWidth={13}
-          activeStrokeWidth={13}
-          activeStrokeColor={"#27b1fa"}
-          inActiveStrokeColor={"#292929"}
-          titleFontSize={20}
-          valueSuffix={"%"}
-          progressFormatter={(value: number) => {
-            "worklet";
-            return value.toFixed(1); // 1 decimal place
-          }}
-        />
+        
       </View>
       <View className="flex-column justify-start items-start">
         <Text className="text-appwhite/80 text-lg font-semibold">

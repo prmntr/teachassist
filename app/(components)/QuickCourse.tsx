@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import CircularProgress from "react-native-circular-progress-indicator";
 import { SecureStorage } from "../(auth)/taauth";
 import { Course } from "./CourseParser";
 
@@ -118,7 +117,6 @@ export const CourseInfoBox = ({
   ) {
     return (
       <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
-
         <View className="mb-2">
           <View className="flex-row items-center justify-start">
             <View className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
@@ -200,24 +198,7 @@ export const CourseInfoBox = ({
         <View>
           {(() => {
             const mark = parseFloat(selectedCourse.courseMark) || 0;
-            return (
-              <CircularProgress
-                value={mark}
-                duration={400}
-                progressValueColor={"#2faf7f"}
-                radius={50}
-                inActiveStrokeWidth={13}
-                activeStrokeWidth={13}
-                activeStrokeColor={"#2faf7f"}
-                inActiveStrokeColor={"#292929"}
-                valueSuffix={"%"}
-                progressFormatter={(value: number) => {
-                  "worklet";
-
-                  return value.toFixed(1); // 1 decimal place
-                }}
-              />
-            );
+            return <View></View>;
           })()}
         </View>
       </View>
