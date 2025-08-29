@@ -63,7 +63,10 @@ const SignInScreen = () => {
   };
 
   useEffect(() => {
-    Alert.alert("Hey there!", `Are you a tester? Use the placeholder username and password '123456789' and 'password' to test the app!`)
+    Alert.alert(
+      "Hey there!",
+      `Are you a tester? Use the placeholder username and password '123456789' and 'password' to test the app!`
+    );
   }, []);
 
   return (
@@ -150,7 +153,7 @@ const SignInScreen = () => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           Alert.alert(
             "Try these steps",
-            `1. Try disabling your VPN; TeachAssist is only available to YRDSB students in Canada; we're working on a fix.\n\n2. Check your internet connection.\n\n3. Check the play store for any updates.`
+            `1. Try disabling your VPN; TeachAssist is only available to YRDSB students with an IP in Canada; we're working on a fix.\n\n2. Check your internet connection.\n\n3. Check the play store for any updates.`
           );
         }}
       >

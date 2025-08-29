@@ -17,7 +17,7 @@ const ProfileScreen = () => {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const appVersion = "v0.1.2"; //* update w/ app.json
+  const appVersion = "v0.1.3"; //* update w/ app.json
 
   const [userName, setUserName] = useState<string | null>(null);
   const [passWord, setPassWord] = useState<string | null>(null);
@@ -94,6 +94,8 @@ const ProfileScreen = () => {
     await SecureStorage.delete("ta_student_id");
     await SecureStorage.delete("ta_session_token");
     await SecureStorage.delete("ta_courses");
+    await SecureStorage.delete("grade_previous_average");
+    await SecureStorage.delete("grade_last-updated");
     console.log("Logged out successfully. All session data cleared.");
     router.replace("/");
   };
@@ -184,7 +186,7 @@ const ProfileScreen = () => {
               <View className="flex-row justify-between items-center">
                 <View>
                   <Text className="text-appwhite text-lg font-semibold">
-                    Appearance
+                    Appearance (coming soon)
                   </Text>
                   <Text className="text-appwhite/60 text-sm mt-1">
                     Dark Theme
@@ -280,7 +282,7 @@ const ProfileScreen = () => {
                 }}
               >
                 <Image
-                  source={require("../../assets/images/transparent_ta_icon.png")}
+                  source={require("../../assets/images/transparent_playstore.png")}
                   className="w-15 h-15"
                 />
               </TouchableOpacity>

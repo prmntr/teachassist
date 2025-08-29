@@ -1,16 +1,16 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
+import * as Haptics from "expo-haptics";
 import { useState } from "react";
 import {
+  Alert,
+  Image,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
-  Image,
-  Alert
 } from "react-native";
 import TeachAssistAuthFetcher from "../(auth)/taauth";
 import AppointmentBooking from "../(components)/AppointmentBooking";
-import * as Haptics from "expo-haptics";
 
 const Guidance = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -56,12 +56,16 @@ const Guidance = () => {
 
   const handleBookingResult = (result: string) => {
     console.log("booking result:", result);
-    if (result.includes("successfully")){
-      Alert.alert("Appointment Successful",`You have now been booked for a guidance appointment on ${selectedDate}.`)
-    } setBookingResult(result);
+    if (result.includes("successfully")) {
+      Alert.alert(
+        "Appointment Successful",
+        `You have now been booked for a guidance appointment on ${selectedDate}.`
+      );
+    }
+    setBookingResult(result);
     setBookingUrl(null);
     setIsLoading(false);
-    
+
     // Clear booking result after 3 secs
     setTimeout(() => {
       setBookingResult(null);
@@ -73,7 +77,7 @@ const Guidance = () => {
     setBookingResult(`Booking error: ${error}`);
     setBookingUrl(null);
     setIsLoading(false);
-    
+
     // Clear booking result after 3 seconds
     setTimeout(() => {
       setBookingResult(null);
@@ -99,18 +103,20 @@ const Guidance = () => {
         </ScrollView>
       );
     }
-    
+
     if (bookingResult) {
       return (
         <ScrollView
           className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
           showsVerticalScrollIndicator={false}
         >
-          <Text className={`text-center mt-2 text-lg ${
-            bookingResult.includes('successfully') 
-              ? 'text-emerald-400' 
-              : 'text-red-400'
-          }`}>
+          <Text
+            className={`text-center mt-2 text-lg ${
+              bookingResult.includes("successfully")
+                ? "text-emerald-400"
+                : "text-red-400"
+            }`}
+          >
             {bookingResult}
           </Text>
         </ScrollView>
@@ -136,9 +142,23 @@ const Guidance = () => {
           className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
           showsVerticalScrollIndicator={false}
         >
-          <Text className="text-red-400 text-center mt-2 text-lg">
-            Error: {error}
-          </Text>
+          <View className="flex items-center justify-center">
+            <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
+              {selectedDate.toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}
+            </Text>
+            <Image
+              source={require("../../assets/images/not_found.png")}
+              className=" w-30 h-30 my-3"
+              style={{ tintColor: "#27b1fa" }}
+            />
+            <Text className="text-red-700 text-center text-xl font-semibold">
+              An error occured: {error}
+            </Text>
+          </View>
         </ScrollView>
       );
     }
@@ -149,21 +169,28 @@ const Guidance = () => {
           className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
           showsVerticalScrollIndicator={false}
         >
-          <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-            {selectedDate.toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}
-          </Text>
-          <Text className="text-appwhite text-center mt-2 text-lg">
-            {selectedDate.toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}{" "}
-            is not a school day.{`\n`}Choose another date and try again.
-          </Text>
+          <View className="flex items-center justify-center">
+            <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
+              {selectedDate.toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}
+            </Text>
+            <Image
+              source={require("../../assets/images/not_found.png")}
+              className=" w-30 h-30 my-3"
+              style={{ tintColor: "#27b1fa" }}
+            />
+            <Text className="text-appwhite text-center text-xl font-semibold">
+              {selectedDate.toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              }) + ` `}
+              is not a school day.{`\n`}Choose another date and try again.
+            </Text>
+          </View>
         </ScrollView>
       );
     }
@@ -187,10 +214,10 @@ const Guidance = () => {
     ) {
       // use appt booking component
       return (
-          <AppointmentBooking
-            html={guidanceResult}
-            onAppointmentPress={handleAppointmentPress}
-          />
+        <AppointmentBooking
+          html={guidanceResult}
+          onAppointmentPress={handleAppointmentPress}
+        />
       );
     }
 
@@ -226,7 +253,7 @@ const Guidance = () => {
             style={{ tintColor: "#27b1fa" }}
           />
           <Text className="text-appwhite text-center text-xl font-semibold">
-            Choose a date{'\n'}to show appointments.
+            Choose a date{"\n"}to show appointments.
           </Text>
         </View>
       </ScrollView>

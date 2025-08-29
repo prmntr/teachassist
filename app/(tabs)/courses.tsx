@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,15 +11,13 @@ import {
   View,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
+import { parseStudentGrades, type Course } from "../(components)/CourseParser"; // Update import path
 import Messages from "../(components)/Messages";
 import { CourseInfoBox } from "../(components)/QuickCourse";
-
-// Retrieve each course
+import GradeAverageTracker from "../(components)/GradeAverage";
 
 const CoursesScreen = () => {
-  const [coursesHtml, setCoursesHtml] = useState<string | null>(null);
-  const [cachedHtml, setCachedHtml] = useState<{ [key: string]: string }>({});
-  let [courseIds, setCourseIds] = useState<string[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("Loading...");
   const [shouldRefreshWithLogin, setShouldRefreshWithLogin] = useState(false);
@@ -30,23 +28,19 @@ const CoursesScreen = () => {
 
   const router = useRouter();
 
-  // since idk what the courses thing looks like (made in august), take a chance and get 6 digit strings
-  const extractCourseIds = (htmlString: string): string[] => {
-    const sixDigitRegex = /\b\d{6}\b/g;
-    const matches = htmlString.match(sixDigitRegex);
-    return matches ? [...new Set(matches)] : []; // remove duplicates
-  };
-
-  // get the html of all the courses (should already be here from taauth)
-  const loadCachedCourses = async (ids: string[]) => {
+  // Load cached course HTML data for courses that have subject IDs
+  const loadCachedCourses = async (courseList: Course[]) => {
     const cached: { [key: string]: string } = {};
-    for (const id of ids) {
-      const cachedData = await SecureStorage.load(`course_${id}`);
-      if (cachedData) {
-        cached[id] = cachedData;
+    for (const course of courseList) {
+      if (course.subjectId) {
+        const cachedData = await SecureStorage.load(
+          `course_${course.subjectId}`
+        );
+        if (cachedData) {
+          cached[course.subjectId] = cachedData;
+        }
       }
     }
-    setCachedHtml(cached);
   };
 
   const getUserName = async () => {
@@ -59,31 +53,42 @@ const CoursesScreen = () => {
       setMessage("Session expired. Please log in again.");
       router.replace("/signin");
     } else if (result.includes("Login Success")) {
-      // after successful login, reload the data
+      // After successful login, reload the data
       setMessage("Login successful! Loading courses...");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShouldRefreshWithLogin(false);
       loadHtmlOrFetch();
     } else {
-      setCoursesHtml(result);
+      // Parse the HTML using the new parser
+      try {
+        const parsedCoursesJson = parseStudentGrades(result);
+        const parsedCourses: Course[] = JSON.parse(parsedCoursesJson);
 
-      // Extract course IDs from the result
-      const extractedIds = extractCourseIds(result);
-      setCourseIds(extractedIds);
+        // Save to secure storage
+        await SecureStorage.save("ta_courses", parsedCoursesJson);
 
-      if (extractedIds.length > 0) {
-        setMessage(
-          `Found ${extractedIds.length} course(s). Loading cached data...`
-        );
+        setCourses(parsedCourses);
 
-        // Load cached HTML for all found course IDs
-        await loadCachedCourses(extractedIds);
+        if (parsedCourses.length > 0) {
+          setMessage(
+            `Found ${parsedCourses.length} course(s). Loading cached data...`
+          );
 
-        setMessage(
-          `Courses loaded successfully. Found course IDs: ${extractedIds.join(", ")}`
-        );
-      } else {
-        setMessage("No course IDs found in the response.");
+          // Load cached HTML for courses with subject IDs
+          await loadCachedCourses(parsedCourses);
+
+          const coursesWithGrades = parsedCourses.filter(
+            (course) => course.hasGrade
+          );
+          setMessage(
+            `Courses loaded successfully. ${coursesWithGrades.length} courses have grades available.`
+          );
+        } else {
+          setMessage("No courses found in the response.");
+        }
+      } catch (error) {
+        console.error("Error parsing courses:", error);
+        setMessage("Error parsing course data. Please try again.");
       }
 
       setIsLoading(false);
@@ -93,7 +98,6 @@ const CoursesScreen = () => {
   const onError = (error: string) => {
     setMessage(`Error: ${error}`);
     setShouldRefreshWithLogin(false);
-    // Don't automatically redirect to signin on refresh errors
     setIsLoading(false);
   };
 
@@ -103,57 +107,55 @@ const CoursesScreen = () => {
 
   const loadHtmlOrFetch = async () => {
     setMessage("Checking for saved courses...");
-    const savedCourses = await SecureStorage.load("courses_main_html");
-    console.log(savedCourses);
+    const savedCoursesJson = await SecureStorage.load("ta_courses");
 
     await getUserName();
 
-    if (savedCourses) {
-      setCoursesHtml(savedCourses);
+    if (savedCoursesJson) {
+      try {
+        const savedCourses: Course[] = JSON.parse(savedCoursesJson);
+        setCourses(savedCourses);
 
-      // Extract course IDs from saved courses
-      const extractedIds = extractCourseIds(savedCourses);
-      setCourseIds(extractedIds);
+        // Load cached HTML for courses with subject IDs
+        await loadCachedCourses(savedCourses);
 
-      if (extractedIds.length > 0) {
-        // Load cached HTML for all found course IDs
-        await loadCachedCourses(extractedIds);
-      }
-      setMessage(`Courses last updated ${new Date().toLocaleTimeString()}`);
-
-      setIsLoading(false);
-    } else {
-      const savedUsername = await SecureStorage.load("ta_username");
-      if (savedUsername?.includes("123456789")) {
-        setMessage("This is a test account. No courses are available.");
-        setCourseIds([]);
-        setCoursesHtml("test_account"); // set something random
+        setMessage(``);
         setIsLoading(false);
-      } else {
-        setMessage(
-          "Stored courses not found. Trying again..." // reauth with cookies
-        );
-        console.warn("Cookies not found");
-        setIsLoading(true);
+      } catch (error) {
+        console.error("Error parsing saved courses:", error);
+        setMessage("Error loading saved courses. Fetching fresh data...");
+        // Continue to fetch fresh data
       }
+    }
+
+    // Check if this is a test account
+    const savedUsername = await SecureStorage.load("ta_username");
+    if (savedUsername?.includes("123456789")) {
+      setMessage("This is a test account. No courses are available.");
+      setCourses([]);
+      setIsLoading(false);
+    } else if (!savedCoursesJson) {
+      setMessage("Stored courses not found. Trying again...");
+      console.warn("Courses not found in storage");
+      setIsLoading(true);
     }
   };
 
   const handleRefresh = async () => {
     setIsLoading(true);
-    setCoursesHtml(null);
-    setCachedHtml({});
-    setCourseIds([]);
+    setCourses([]);
 
-    // clear html
-    await SecureStorage.delete("courses_main_html");
+    // Clear stored course data
+    await SecureStorage.delete("ta_courses");
 
-    // clear KNOWN course ids
-    for (const id of courseIds) {
-      await SecureStorage.delete(`course_${id}`);
+    // Clear cached HTML for courses that have subject IDs
+    for (const course of courses) {
+      if (course.subjectId) {
+        await SecureStorage.delete(`course_${course.subjectId}`);
+      }
     }
 
-    // get credentials
+    // Get credentials for re-authentication
     const savedUsername = await SecureStorage.load("ta_username");
     const savedPassword = await SecureStorage.load("ta_password");
 
@@ -169,12 +171,18 @@ const CoursesScreen = () => {
       router.replace("/signin");
       Alert.alert("Username and password not found. Please log in again.");
     }
+
+    // Handle test account
     if (savedUsername === "123456789") {
       console.log(savedUsername);
-      setCourseIds([]);
-      setCoursesHtml("test_account");
+      setCourses([]);
+      setIsLoading(false);
     }
   };
+
+  // Filter courses by semester for organization
+  const semester1Courses = courses.filter((course) => course.semester === 1);
+  const semester2Courses = courses.filter((course) => course.semester === 2);
 
   useEffect(() => {
     loadHtmlOrFetch();
@@ -189,20 +197,24 @@ const CoursesScreen = () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             handleRefresh();
           }}
-          className="bg-baccent/20 border-baccent/30 border rounded-lg px-3 py-2"
+          className="bg-baccent/80 rounded-lg px-3 py-2"
           disabled={isLoading}
         >
           <Image
             source={require("../../assets/images/refresh.png")}
             className="w-8 h-8"
-            style={{ tintColor: "#27b1fa" }}
+            style={{ tintColor: "#191919" }}
           />
         </TouchableOpacity>
       </View>
       <Text className="text-gray-300 text-lg mt-1">{Messages()}</Text>
-      <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 mt-5 p-2 text-center rounded-lg font-medium">
-        {message}
-      </Text>
+      {message === "" ? (
+        <View className="mb-5"></View> // show nothing successfully fetched
+      ) : (
+        <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 mt-5 p-2 text-center rounded-lg font-medium mb-5">
+          {message}
+        </Text>
+      )}
 
       {isLoading && (
         <>
@@ -226,48 +238,82 @@ const CoursesScreen = () => {
         </>
       )}
 
-      {coursesHtml && (
+      {courses.length > 0 && (
         <ScrollView showsVerticalScrollIndicator={false}>
-          {courseIds.length === 0 ? (
-            <View className="flex items-center justify-center mt-10">
-              <Image
-                source={require("../../assets/images/not_found.png")}
-                className=" w-30 h-30 my-3"
-                style={{ tintColor: "#27b1fa" }}
-              />
-              <Text className="text-appwhite text-center text-xl font-semibold">
-                {"No courses found! \nPlease try again later."}
-              </Text>
-            </View>
-          ) : (
+          <GradeAverageTracker
+            showTrend={true}
+            showCourseCount={true}
+            showLastUpdated={true}
+          />
+          {/* sem 1 Courses */}
+          {semester1Courses.length > 0 && (
             <>
-              {/* 
-              <Text className="text-white mb-4">
-                {"Response from teachassist: \n\n" + coursesHtml}
-              </Text>
-              */}
+              <View className="mt-6">
+                <Text className="text-appwhite/90 text-xl font-semibold mb-2">
+                  Semester 1 ({semester1Courses.length} courses)
+                </Text>
+              </View>
+              {semester1Courses.map((course) => (
+                <View key={`${course.courseCode}-${course.semester}`}>
+                  {course.hasGrade ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.replace("/courseview/${course.subjectId}")
+                      }
+                    >
+                      <CourseInfoBox courseCode={course.courseCode} />
+                    </TouchableOpacity>
+                  ) : (
+                    <View>
+                      <CourseInfoBox courseCode={course.courseCode} />
+                    </View>
+                  )}
+                </View>
+              ))}
+            </>
+          )}
 
-              {/* display course ids */}
-              {courseIds.map((courseId) => (
-                <Link
-                  key={courseId}
-                  href={
-                    !cachedHtml[courseId]
-                      ? `/courseview/Error`
-                      : `/courseview/${courseId}`
-                  }
-                  className={`min-w-max my-7 ${
-                    cachedHtml[courseId]?.toLowerCase().includes("internet")
-                      ? "pointer-events-none cursor-default"
-                      : ""
-                  }`}
-                >
-                  <CourseInfoBox htmlContent={cachedHtml[courseId] ?? ""} />
-                </Link>
+          {/* sem 2 Courses */}
+          {semester2Courses.length > 0 && (
+            <>
+              <View className="mt-6">
+                <Text className="text-appwhite/90 text-xl font-semibold mb-2">
+                  Semester 2 ({semester2Courses.length} courses)
+                </Text>
+              </View>
+              {semester2Courses.map((course) => (
+                <View key={`${course.courseCode}-${course.semester}`}>
+                  {course.hasGrade ? (
+                    <TouchableOpacity
+                      onPress={() =>
+                        router.replace("/courseview/${course.subjectId}")
+                      }
+                    >
+                      <CourseInfoBox courseCode={course.courseCode} />
+                    </TouchableOpacity>
+                  ) : (
+                    <View>
+                      <CourseInfoBox courseCode={course.courseCode} />
+                    </View>
+                  )}
+                </View>
               ))}
             </>
           )}
         </ScrollView>
+      )}
+
+      {!isLoading && courses.length === 0 && (
+        <View className="flex items-center justify-center mt-10">
+          <Image
+            source={require("../../assets/images/not_found.png")}
+            className="w-30 h-30 my-3"
+            style={{ tintColor: "#27b1fa" }}
+          />
+          <Text className="text-appwhite text-center text-xl font-semibold">
+            {"No courses found! \nPlease try again later."}
+          </Text>
+        </View>
       )}
     </View>
   );

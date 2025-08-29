@@ -3,11 +3,11 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Text,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "./(auth)/taauth";
 import "./global.css";
@@ -46,7 +46,9 @@ const InitialRoute = () => {
       }
     } catch (error) {
       // error getting auth
-      Alert.alert("There was an error logging you back in. Please log in again.");
+      Alert.alert(
+        "There was an error logging you back in. Please log in again."
+      );
       console.log("Error loading credentials:", error);
       setIsCheckingAuth(false);
     }
@@ -89,8 +91,8 @@ const InitialRoute = () => {
     return (
       <View className="flex-1 items-center justify-center bg-1">
         <Image
-          source={require("../assets/images/transparent_ta_icon.png")}
-          className="w-22 h-21 mb-6 object-fill"
+          source={require("../assets/images/transparent_playstore.png")}
+          className="w-26 h-25 mb-6 object-fill"
         />
         <Text className="text-5xl font-bold text-appwhite mb-4">
           TeachAssist
@@ -116,7 +118,7 @@ const InitialRoute = () => {
   return (
     <View className="flex-1 items-center justify-center bg-1">
       <Image
-        source={require("../assets/images/transparent_ta_icon.png")}
+        source={require("../assets/images/transparent_playstore.png")}
         className="w-22 h-22 mb-6 object-fill"
       />
       <Text className="text-5xl font-bold text-appwhite">TeachAssist</Text>
@@ -140,9 +142,7 @@ const InitialRoute = () => {
           />
         </View>
       </TouchableOpacity>
-      <Text className="text-gray-600 text-lg absolute bottom-4">
-        v0.1.2
-      </Text>
+      <Text className="text-gray-600 text-xl absolute bottom-4">v0.1.3</Text>
     </View>
   );
 };

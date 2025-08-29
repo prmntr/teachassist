@@ -2,6 +2,7 @@ import * as SecureStore from "expo-secure-store";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, View } from "react-native";
 import { WebView, WebViewMessageEvent } from "react-native-webview";
+import { parseStudentGrades } from "../(components)/CourseParser";
 
 // wrapper for expo-secure-store
 export class SecureStorage {
@@ -37,7 +38,7 @@ interface TeachAssistAuthFetcherProps {
   subjectID?: number | null;
   // getting guidance w/ date
   getGuidance?: Date;
-  // ADDED: booking appointment
+  // booking appointment
   bookAppointment?: string;
 
   onResult: (result: string) => void;
@@ -57,7 +58,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   fetchWithCookies,
   subjectID,
   getGuidance,
-  bookAppointment, // ADDED
+  bookAppointment,
   onResult,
   onError,
   onLoadingChange,
@@ -140,11 +141,11 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
       if (response.ok) {
         const calendarHtml = await response.text();
-        // Extract school name from first h1 tag
+        // get school name
         const h1Match = calendarHtml.match(/<h1[^>]*>(.*?)<\/h1>/i);
         if (h1Match && h1Match[1]) {
           const fullH1Text = h1Match[1].trim();
-          // Remove "School Full Calendar" suffix to get just the school name
+          // bc calender has school full cal at front
           const schoolName = fullH1Text
             .replace(/\s+School Full Calendar$/i, "")
             .trim();
@@ -178,7 +179,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
       // check for main courses page html first if not logging in
       if (!loginParams && !subjectID && !getGuidance && !bookAppointment) {
-        const cachedMainHtml = await SecureStorage.load("courses_main_html");
+        const cachedMainHtml = await SecureStorage.load("ta_courses");
         if (cachedMainHtml) {
           onResult(cachedMainHtml);
           onLoadingChange?.(false);
@@ -198,7 +199,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           await SecureStorage.save("ta_password", loginParams.password);
           await SecureStorage.save("ta_student_id", "");
           await SecureStorage.save("ta_session_token", "");
-          await SecureStorage.save("courses_main_html", "");
+          await SecureStorage.save("ta_courses", "");
           await SecureStorage.save("school_id", "0");
           await SecureStorage.save("school_name", "Example School");
           onLoadingChange?.(false);
@@ -225,8 +226,8 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         if (savedSchoolId) {
           // const schoolId = JSON.parse(savedSchoolId);
           const guidanceDate = getGuidance.toISOString().slice(0, 10);
-          console.warn(`taauth: Fetching guidance for date ${guidanceDate}`);
-          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`; // 1
+          console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
+          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=201795&inputDate=${guidanceDate}`; // 1
           setTargetUrl(url);
         } else {
           const errorMsg = "No School ID found";
@@ -235,7 +236,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           onLoadingChange?.(false);
         }
       } else if (bookAppointment && savedStudentId && savedSessionToken) {
-        // ADDED: Handle appointment booking
+        // fixes url
         const decodedUrl = bookAppointment
           .replace(/&amp;/g, "&")
           .replace(/&lt;/g, "<")
@@ -304,36 +305,13 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           } else if (html.toLowerCase().includes("student reports")) {
             console.log("taauth: Login successful.");
 
-            // parse using regex for courses
-            const allDivs = html.match(
-              /<div class="green_border_message box">([\s\S]*?)<\/div>/g
-            );
-
-            let courseArr: string[] = [];
-
-            if (allDivs) {
-              const targetDiv = allDivs.find((div) =>
-                div.includes("Course Name")
-              );
-
-              if (targetDiv) {
-                // Get TR tags from that div
-                const matches = targetDiv.match(/<tr[\s\S]*?<\/tr>/g);
-                if (matches) {
-                  courseArr = matches.map((tr) =>
-                    tr.replace(/<[^>]*>/g, "").trim()
-                  );
-                }
-              }
-            }
+            const coursesHtmlString: string = parseStudentGrades(html);
 
             // get school id for guidance
             const schoolId = html.match(/school_id=(\d+)/)?.[1];
 
-            console.log("School id: " + schoolId);
-            console.log("Course response: " + courseArr);
-            const coursesHtmlString = JSON.stringify(courseArr);
-            const schoolIDString = JSON.stringify(schoolId);
+            console.log(coursesHtmlString);
+            console.log(coursesHtmlString.length);
 
             const cookiePairs = cookies.split("; ").map((c) => c.split("="));
             const studentId =
@@ -341,15 +319,14 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             const sessionToken =
               cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
               null;
-
             if (studentId && sessionToken && schoolId) {
               // save everything
               await SecureStorage.save("ta_username", loginParams.username);
               await SecureStorage.save("ta_password", loginParams.password);
               await SecureStorage.save("ta_student_id", studentId);
               await SecureStorage.save("ta_session_token", sessionToken);
-              await SecureStorage.save("courses_main_html", coursesHtmlString);
-              await SecureStorage.save("school_id", schoolIDString); // 1
+              await SecureStorage.save("ta_courses", coursesHtmlString);
+              await SecureStorage.save("school_id", schoolId); // 1
               await fetchSchoolName(schoolId); // get here b/c relies on school id
               // extract course IDs from the courses HTML and fetch all of them
               const courseIds = extractCourseIds(coursesHtmlString);
@@ -373,6 +350,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           } else {
             onResult("Login Failed: Unexpected content. Contact support!");
           }
+          // everything else is self explanatory
         } else if (fetchWithCookies) {
           if (html.toLowerCase().includes("log in")) {
             onResult("Login Failed: Session expired or invalid cookies.");
@@ -390,13 +368,11 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             console.log("taauth: guidance html fetched successfully");
           }
         } else if (bookAppointment) {
-          // ADDED: Handle appointment booking response
+          console.log(html);
           if (html.toLowerCase().includes("log in")) {
             onResult("Booking Failed: Session expired or invalid cookies.");
           } else if (html.toLowerCase().includes("cancel")) {
-            console.log(
-              "taauth: appointment booking successful"
-            );
+            console.log("taauth: appointment booking successful");
             onResult("Appointment booked successfully!");
           } else {
             console.log(
@@ -432,6 +408,12 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     return null;
   }
 
+  /* 
+  Getting 2Pac money twice over
+  Still a real n****, red Coogi sweater, dice roller
+  I'm making love to the angel of death
+  Catching feelings never stumble, retracing my steps
+  */
   return (
     <View style={styles.hiddenWebViewContainer}>
       <WebView

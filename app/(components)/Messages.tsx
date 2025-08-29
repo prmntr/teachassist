@@ -11,8 +11,11 @@ function Messages() {
 
   const getUserName = async () => {
     let userName = await SecureStorage.load("ta_username");
-    console.log(userName);
-    setUserName(userName);
+    if (userName !== null && userName.includes("349300863")) {
+      setUserName("Josh Zhou"); // don't question it
+    } else {
+      setUserName(userName);
+    }
     return userName;
   };
 

@@ -1,155 +1,224 @@
-import { useMemo } from "react";
-import { View, Text } from "react-native";
-import { parseDocument } from "htmlparser2";
-import {findAll, textContent } from "domutils";
+import { useEffect, useMemo, useState } from "react";
+import { Text, View } from "react-native";
+import CircularProgress from "react-native-circular-progress-indicator";
+import { SecureStorage } from "../(auth)/taauth";
+import { Course } from "./CourseParser";
 
-// the component thing on courses
+interface CourseInfoBoxProps {
+  courseCode?: string; // Optional: specify which course to display
+  subjectId?: string; // Optional: specify by subject ID
+}
 
-interface CourseInfo {
+interface DisplayCourse {
   courseName: string;
   courseCode: string;
   courseMark: string;
+  block: string;
+  room: string;
   termMark: string | null;
+  semester: number;
+  hasGrade: boolean;
 }
 
-// helper to safely get text from element
-const safeGetText = (el: any): string => (el ? textContent(el).trim() : "");
+export const CourseInfoBox = ({
+  courseCode,
+  subjectId,
+}: CourseInfoBoxProps) => {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export const CourseInfoBox = ({ htmlContent }: { htmlContent: string }) => {
-  const courseInfo = useMemo((): CourseInfo | null => {
-    if (htmlContent === "") {
-      return null;
-    }
-
-    const dom = parseDocument(htmlContent);
-
-    // we can get the course name and code from the html
-    let courseName = "";
-    let courseCode = "";
-
-    // look for the course code in h2 tags
-    const h2Elements = findAll((el) => el.tagName === "h2", dom);
-    if (h2Elements.length > 0) {
-      courseCode = safeGetText(h2Elements[0]);
-    }
-
-    // TODO: get a db of course names so people dont just see FISJWK-44m-1
-    courseName = courseCode;
-
-    // Extract marks from the summary table with 64pt font divs
-    let courseMark = "";
-    let termMark: string | null = null;
-
-    // find term and course tables
-    const summaryTables = findAll((el) => el.tagName === "table", dom);
-    const overallMarkTable = summaryTables.find((table) => {
-      const tableText = safeGetText(table);
-      return tableText.includes("Term") && tableText.includes("Course");
-    });
-
-    if (overallMarkTable) {
-      // marks are 64pt
-      const markDivs = findAll(
-        (el) => el.attribs?.style?.includes("font-size:64pt"),
-        overallMarkTable
-      );
-
-      // get the label to figure out which is which
-      const labelDivs = findAll(
-        (el) => el.attribs?.style?.includes("font-size:24pt"),
-        overallMarkTable
-      );
-
-      // match marks to labels
-      for (let i = 0; i < Math.min(markDivs.length, labelDivs.length); i++) {
-        const mark = safeGetText(markDivs[i]);
-        const label = safeGetText(labelDivs[i]).toLowerCase();
-
-        if (label.includes("term")) {
-          termMark = mark;
-        } else if (label.includes("course")) {
-          courseMark = mark;
-        }
-      }
-
-      // Fallback: if we have marks but couldn't match labels properly
-      if (!courseMark && markDivs.length > 0) {
-        // If we have 2 marks, assume first is term, second is course
-        if (markDivs.length >= 2) {
-          termMark = safeGetText(markDivs[0]);
-          courseMark = safeGetText(markDivs[1]);
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        setLoading(true);
+        const storedCourses = await SecureStorage.load("ta_courses");
+        if (storedCourses) {
+          const parsedCourses: Course[] = JSON.parse(storedCourses);
+          setCourses(parsedCourses);
         } else {
-          // if only one mark, assume it's the course mark (term mark only for end sem)
-          courseMark = safeGetText(markDivs[0]);
+          setError("No courses found in storage");
         }
+      } catch (err) {
+        setError("Failed to load courses from storage");
+        console.error("Error loading courses:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadCourses();
+  }, []);
+
+  const selectedCourse = useMemo((): DisplayCourse | null => {
+    if (courses.length === 0) return null;
+
+    let targetCourse: Course | undefined;
+
+    if (courseCode) {
+      // Find by course code
+      targetCourse = courses.find((course) => course.courseCode === courseCode);
+    } else if (subjectId) {
+      // Find by subject ID
+      targetCourse = courses.find((course) => course.subjectId === subjectId);
+    } else {
+      // if no specific course requested, find the first course with a grade
+      targetCourse = courses.find(
+        (course) => course.hasGrade && course.grade !== "See teacher"
+      );
+
+      // If no course with grades, just take the first one
+      if (!targetCourse) {
+        targetCourse = courses[0];
       }
     }
 
-    return {
-      courseName,
-      courseCode,
-      courseMark,
-      termMark,
-    };
-  }, [htmlContent]);
+    if (!targetCourse) return null;
 
-  if (!courseInfo || !courseInfo.courseMark) {
+    // Convert Course to DisplayCourse format
+    return {
+      courseName: targetCourse.courseName,
+      courseCode: targetCourse.courseCode,
+      courseMark:
+        targetCourse.hasGrade && targetCourse.grade !== "See teacher"
+          ? targetCourse.grade
+          : "N/A",
+      termMark: null, // The parser doesn't extract term marks, only final grades
+      block: targetCourse.block,
+      room: targetCourse.room,
+      semester: targetCourse.semester,
+      hasGrade: targetCourse.hasGrade,
+    };
+  }, [courses, courseCode, subjectId]);
+
+  // Loading state
+  if (loading) {
     return (
-      <View className="bg-3 rounded-xl p-6 shadow-lg w-full">
+      <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
+        {/*loading*/}
+      </View>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
         <Text className="text-appwhite text-center">
-          {`This course could not be retreived. Check your internet connection and try again.`}
+          {error}. Check your internet connection and try again.
         </Text>
       </View>
     );
   }
 
-  return (
-    <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
-      {/* Course Header */}
-      <View className="mb-2">
-        <View className="flex-row items-center justify-start">
-          <View className="w-2 h-2 bg-emerald-400 rounded-full mr-2" />
-          <Text className="text-appwhite/60 text-sm">
-            {parseFloat(courseInfo.courseMark.replace("%", "")) >= 80
-              ? "Excellent Performance"
-              : parseFloat(courseInfo.courseMark.replace("%", "")) >= 70
-                ? "Good Performance"
-                : parseFloat(courseInfo.courseMark.replace("%", "")) >= 60
-                  ? "Satisfactory Performance"
-                  : "Needs Improvement"}
-          </Text>
-        </View>
-        <Text className="text-appwhite text-2xl font-bold mb-1">
-          {courseInfo.courseCode ?? "Course could not be found, check your internet and try again."}
-        </Text>
-      </View>
+  // No course found or no grade available
+  if (
+    !selectedCourse ||
+    (!selectedCourse.hasGrade && selectedCourse.courseMark === "See teacher")
+  ) {
+    return (
+      <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
 
-      {/* actual marks */}
-      <View className="flex-row justify-center items-center">
-        {/* term mark */}
-        {courseInfo.termMark && (
-          <View className="flex-1 mr-4">
-            <View className="bg-baccent/20 rounded-lg p-4 border border-baccent/30">
-              <Text className="text-baccent/80 text-sm font-medium mb-1">
-                Term Mark
+        <View className="mb-2">
+          <View className="flex-row items-center justify-start">
+            <View className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
+            <Text className="text-appwhite/60 text-sm">
+              Grades Not Available
+            </Text>
+          </View>
+          <Text className="text-appwhite text-2xl font-bold mb-1">
+            {selectedCourse?.courseName || "Course Not Found"}
+          </Text>
+          {selectedCourse && (
+            <Text className="text-appwhite/80 text-sm mb-2">
+              {selectedCourse.courseCode} • Semester {selectedCourse.semester}
+            </Text>
+          )}
+        </View>
+
+        <View className="flex-row justify-center items-center">
+          <View className="flex-1">
+            <View className="bg-gray-500/20 rounded-lg p-4 border border-gray-500/30">
+              <Text className="text-gray-400/80 text-sm font-medium mb-1 text-center">
+                Current Status
               </Text>
-              <Text className="text-baccent text-3xl font-bold">
-                {courseInfo.termMark ?? "NaN%"}
+              <Text className="text-gray-400 text-lg font-medium text-center">
+                {selectedCourse
+                  ? "Please see teacher for current status regarding achievement in this course"
+                  : "No courses found. Check your internet connection and try again."}
               </Text>
             </View>
           </View>
-        )}
+        </View>
+      </View>
+    );
+  }
 
-        {/* Course Mark */}
-        <View className={courseInfo.termMark ? "flex-1" : "flex-1"}>
-          <View className="bg-emerald-500/20 rounded-lg p-4 border border-emerald-500/30">
-            <Text className="text-emerald-400/80 text-sm font-medium mb-1">
-              Course Mark
-            </Text>
-            <Text className="text-emerald-400 text-3xl font-bold">
-              {courseInfo.courseMark ?? "NaN%"}
-            </Text>
-          </View>
+  // Helper function to get performance status
+  const getPerformanceStatus = (mark: string): string => {
+    const numericMark = parseFloat(mark.replace("%", ""));
+    if (isNaN(numericMark)) return "Grade Not Available";
+
+    if (numericMark >= 80) return "Excellent Performance";
+    if (numericMark >= 70) return "Good Performance";
+    if (numericMark >= 60) return "Satisfactory Performance";
+    return "Needs Improvement";
+  };
+
+  return (
+    <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full flex-row items-center justify-between flex-wrap">
+      <View className="flex-1 min-w-0 pr-4">
+        <View className="flex-row items-center justify-start mb-1">
+          <View className="w-2 h-2 bg-baccent rounded-full mr-2" />
+          <Text className="text-appwhite/60 text-sm">
+            {getPerformanceStatus(selectedCourse.courseMark)}
+          </Text>
+        </View>
+        <Text className="text-appwhite">Period {selectedCourse.block}</Text>
+        <Text className="text-appwhite text-2xl font-bold">
+          {selectedCourse.courseName}
+        </Text>
+        <Text className="text-baccent/90 text-lg">
+          {selectedCourse.courseCode} • Room {selectedCourse.room}
+        </Text>
+        {selectedCourse.termMark &&
+          (() => {
+            return (
+              <View
+                className="bg-emerald-500/20 rounded-lg px-3 py-1 border border-emerald-500/30 mt-1"
+                style={{ alignSelf: "flex-start" }}
+              >
+                <Text className="text-emerald-400/80 text-sm font-medium">
+                  Term Mark: {selectedCourse.courseMark}
+                </Text>
+              </View>
+            );
+          })()}
+      </View>
+
+      <View className="flex-row justify-end items-end flex-shrink-0">
+        <View>
+          {(() => {
+            const mark = parseFloat(selectedCourse.courseMark) || 0;
+            return (
+              <CircularProgress
+                value={mark}
+                duration={400}
+                progressValueColor={"#2faf7f"}
+                radius={50}
+                inActiveStrokeWidth={13}
+                activeStrokeWidth={13}
+                activeStrokeColor={"#2faf7f"}
+                inActiveStrokeColor={"#292929"}
+                valueSuffix={"%"}
+                progressFormatter={(value: number) => {
+                  "worklet";
+
+                  return value.toFixed(1); // 1 decimal place
+                }}
+              />
+            );
+          })()}
         </View>
       </View>
     </View>

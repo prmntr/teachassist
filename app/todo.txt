@@ -1,9 +1,6 @@
 TODO LIST
 
-- migrate from touchable to pressable
-- implement guidance
-    - find out what a schoolid is; yrdsb specific?
-- get overall course mark; should be simple
+- migrate from touchable to TouchableOpacity
 - custom assignments
 - course charts
 - why is gluestack not working it worked on all my other projects
@@ -11,10 +8,9 @@ TODO LIST
 - make haptic feedback more pronounced too soft
 - APP ICON LOOKS LIKE SHIT
 - edit error messages
-- vpn
-
-- fix guidance is 1 day ahead
 
 - use safeareas
 
 - flag is // 1
+
+- fix guidance; wont work for schools which have more dumb forms

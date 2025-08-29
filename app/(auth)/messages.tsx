@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
-import { Text, View, TouchableOpacity, Image } from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 
 // Some messages to show the user, no meaningful impact
 

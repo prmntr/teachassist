@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { Text, TouchableOpacity, View, Image} from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 
 // Will be added back in future versions
 
@@ -16,11 +16,11 @@ const Onboarding = () => {
         }}
       >
         <Image
-                  className="w-8 h-8"
-                  style={{ tintColor: "#edebea" }}
-                  source={require("../../assets/images/arrow-icon-left.png")}
-                />
-                <Text className="text-white font-semibold text-lg">Back</Text>
+          className="w-8 h-8"
+          style={{ tintColor: "#edebea" }}
+          source={require("../../assets/images/arrow-icon-left.png")}
+        />
+        <Text className="text-white font-semibold text-lg">Back</Text>
       </TouchableOpacity>
       <View className="flex-1 items-center justify-center px-6">
         <Text className="text-4xl font-bold text-appwhite mb-10">

@@ -1,5 +1,12 @@
 import * as Haptics from "expo-haptics";
-import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Image,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 interface Appointment {
   counselorName: string;
@@ -28,22 +35,28 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
   const parseAppointments = (htmlContent: string): Appointment[] => {
     const appointments: Appointment[] = [];
 
-    // find all guidance councellors
     const counselorRegex =
-      /<div class="box"[^>]*><h3>([^:]+):\s*<\/h3>([\s\S]*?)<\/div>/g;
-    let counselorMatch;
+      /<div class="box"[^>]*>\s*<h3>([^:]+):\s*(?:Guidance\s*\(([^)]+)\))?[^<]*<\/h3>([\s\S]*?)(?=<\/div>|<div class="box")/g;
 
+    let counselorMatch;
     while ((counselorMatch = counselorRegex.exec(htmlContent)) !== null) {
-      const counselorName = counselorMatch[1].trim();
-      const appointmentSection = counselorMatch[2];
-      // get the links for each person
+      const baseName = counselorMatch[1].trim();
+      const guidanceLetters = counselorMatch[2]; // could be undefined if no letters
+      const appointmentSection = counselorMatch[3]; // updated index since we added another capture group
+
+      // bss has letters guidance so
+      const counselorName = guidanceLetters
+        ? `${baseName} (${guidanceLetters})`
+        : baseName;
+
+      // get link for each person
       const linkRegex = /<a href="([^"]+)">@\s*(\d{2}:\d{2}:\d{2})<\/a>/g;
       let linkMatch;
+
       while ((linkMatch = linkRegex.exec(appointmentSection)) !== null) {
         const link = linkMatch[1];
         const time = linkMatch[2];
-
-        // get id
+        // id
         const idMatch = link.match(/id=(\d+)/);
         const id = idMatch ? idMatch[1] : Math.random().toString();
 
@@ -110,29 +123,41 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
         className="bg-3 rounded-xl p-6 mb-4 shadow-lg w-full"
         showsVerticalScrollIndicator={false}
       >
-        <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-          {date}
-        </Text>
-        <Text className="text-appwhite text-center text-lg">
-          {date + ` `}
-          is not a school day.{`\n`}Choose another date and try again.
-        </Text>
+        <View className="flex items-center justify-center mt-10">
+          <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
+            {date}
+          </Text>
+          <Image
+            source={require("../../assets/images/not_found.png")}
+            className=" w-30 h-30 my-3"
+            style={{ tintColor: "#27b1fa" }}
+          />
+          <Text className="text-appwhite text-center text-lg">
+            {date + ` `}
+            is not a school day.{`\n`}Choose another date and try again.
+          </Text>
+        </View>
       </ScrollView>
     );
   }
 
   if (appointments.length === 0) {
     return (
-      <ScrollView showsVerticalScrollIndicator={false} className="items-center">
-        <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-          {date}
-        </Text>
-        <Text className="font-semibold text-xl mb-2">
-          No appointments available
-        </Text>
-        <Text className="text-appwhite text-center">
-          There are currently no open appointment slots for {date}.
-        </Text>
+      <ScrollView
+        className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="flex items-center justify-center mt-10">
+          <Image
+            source={require("../../assets/images/not_found.png")}
+            className=" w-30 h-30 my-3"
+            style={{ tintColor: "#27b1fa" }}
+          />
+          <Text className="text-appwhite text-center text-lg">
+            No appointments are currently available for {date + ". \n"} Choose
+            another date and try again.
+          </Text>
+        </View>
       </ScrollView>
     );
   }
@@ -142,7 +167,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
       showsVerticalScrollIndicator={false}
       className="bg-3 rounded-xl p-6 mb-4 shadow-lg w-full"
     >
-      <View className="mb-4">
+      <View className="mb-5">
         <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
           {date}
         </Text>
@@ -154,7 +179,14 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           Choose a time slot to book an appointment.
         </Text>
       </View>
-
+      {Object.keys(groupedAppointments).some((name) => name.includes("(")) && (
+        <View>
+          <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 p-2 px-3 text-center rounded-lg font-medium mb-4">
+            Your school has last name based councillors! Remember to choose the
+            councillor corresponding to your last name.
+          </Text>
+        </View>
+      )}
       {Object.entries(groupedAppointments).map(
         ([counselorName, counselorAppointments]) => (
           <View key={counselorName} className="mb-6">

@@ -1,4 +1,4 @@
-# TeachAssist
+# TeachAssist v0.1.3
 
 A modern mobile app for the YRDSB TeachAssist portal, built with React Native.
 
@@ -14,17 +14,18 @@ TeachAssist provides students with an open source streamlined mobile experience 
 - 📝 **Assignment Feedback** - Access detailed feedback on completed assignments
 - 🔐 **Secure Login** - End-to-end encryption with YRDSB credentials
 - ⚡ **Fast Performance** - Quick access to your academic data
+- 📅 **Appointment Booking** - Schedule guidance appointments directly from the app
 
 ### Coming Soon
-- 📅 **Appointment Booking** - Schedule guidance appointments directly from the app
 - 🔮 **Performance Prediction** - AI-powered insights to predict future academic performance
 - 📈 **Trend Analysis** - Track your progress over time with detailed analytics
+- 🥇 **Grade Comparison** - Compare your perforance with those of your peers (TBD)
 
 ## Screenshots
 
 <div class="flex items-center justify-center">
 <img src="https://i.ibb.co/MkHS67Q7/1.png" alt="TeachAssist: Helping you get ahead" width="200"/>
-<img src="https://i.ibb.co/ymJR8kB0/2.png" alt="Stay Informed" width="200"/>
+<img src="https://i.ibb.co/mCH9c5ZB/2.png" alt="Stay Informed" width="200"/>
 <img src="https://i.ibb.co/rKb82cCG/3.png" alt="Stay Intelligent" width="200"/>
 <img src="https://i.ibb.co/fVcLVsNL/4.png" alt="Stay Secure" width="200"/>
 <img src="https://i.ibb.co/0jQDgqBT/5.png" alt="Stay Private" width="200"/>
@@ -119,7 +120,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - York Region District School Board for providing the TeachAssist portal
 - The React Native and Expo communities for their excellent documentation and tools
-- All contributors who help make this app better
+- You, for scrolling all the way down!
 
 ---
 
