@@ -14,7 +14,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-play-icon-small.png",
-        "backgroundColor": "#0c0c0c"
+        "backgroundColor": "#161616"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.prmntr.teachassist"
