@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { Text, View, Image } from "react-native";
+import { Image, Text, View } from "react-native";
+import AnimatedProgressWheel from "react-native-progress-wheel";
 import { SecureStorage } from "../(auth)/taauth";
 import { Course } from "./CourseParser";
-import AnimatedProgressWheel from "react-native-progress-wheel";
 
 interface GradeStats {
   currentAverage: number;

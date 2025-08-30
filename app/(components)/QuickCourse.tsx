@@ -118,7 +118,6 @@ export const CourseInfoBox = ({
   ) {
     return (
       <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
-
         <View className="mb-2">
           <View className="flex-row items-center justify-start">
             <View className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
