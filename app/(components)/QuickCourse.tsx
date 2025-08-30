@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Text, View } from "react-native";
-import CircularProgress from "react-native-circular-progress-indicator";
 import { SecureStorage } from "../(auth)/taauth";
 import { Course } from "./CourseParser";
+import AnimatedProgressWheel from "react-native-progress-wheel";
 
 interface CourseInfoBoxProps {
   courseCode?: string; // Optional: specify which course to display
@@ -201,21 +201,23 @@ export const CourseInfoBox = ({
           {(() => {
             const mark = parseFloat(selectedCourse.courseMark) || 0;
             return (
-              <CircularProgress
-                value={mark}
+              <AnimatedProgressWheel
+                size={90}
+                width={13}
+                color={"#2faf7f"}
+                backgroundColor={"#292929"}
+                progress={mark}
+                max={100}
+                rounded={true}
+                rotation={"-90deg"}
                 duration={400}
-                progressValueColor={"#2faf7f"}
-                radius={50}
-                inActiveStrokeWidth={13}
-                activeStrokeWidth={13}
-                activeStrokeColor={"#2faf7f"}
-                inActiveStrokeColor={"#292929"}
-                valueSuffix={"%"}
-                progressFormatter={(value: number) => {
-                  "worklet";
-
-                  return value.toFixed(1); // 1 decimal place
+                showProgressLabel={true}
+                labelStyle={{
+                  color: "#2faf7f",
+                  fontSize: 16,
+                  fontWeight: "600",
                 }}
+                showPercentageSymbol={true}
               />
             );
           })()}

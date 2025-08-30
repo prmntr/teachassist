@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Text, View, Image } from "react-native";
-import CircularProgress from "react-native-circular-progress-indicator";
 import { SecureStorage } from "../(auth)/taauth";
 import { Course } from "./CourseParser";
+import AnimatedProgressWheel from "react-native-progress-wheel";
 
 interface GradeStats {
   currentAverage: number;
@@ -71,7 +71,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
 
   const getTrendIcon = (trend: string) => {
     switch (trend) {
-      case "same":
+      case "up":
         return (
           <Image
             source={require("../../assets/images/caret-arrow-up.png")}
@@ -87,7 +87,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
             style={{ tintColor: "#27b1fa" }}
           />
         );
-      case "up":
+      case "same":
         return (
           <Image
             source={require("../../assets/images/caret-arrow-none.png")}
@@ -197,21 +197,23 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   return (
     <View className="bg-3 rounded-xl p-4 mt-1 flex-row items-center justify-start">
       <View className="flex-column items-center justify-center mr-5">
-        <CircularProgress
-          value={gradeStats.currentAverage}
+        <AnimatedProgressWheel
+          size={125}
+          width={13}
+          color={"#27b1fa"}
+          backgroundColor={"#292929"}
+          progress={gradeStats.currentAverage}
+          max={100}
+          rounded={true}
+          rotation={"-90deg"}
           duration={400}
-          progressValueColor={"#27b1fa"}
-          radius={70}
-          inActiveStrokeWidth={13}
-          activeStrokeWidth={13}
-          activeStrokeColor={"#27b1fa"}
-          inActiveStrokeColor={"#292929"}
-          titleFontSize={20}
-          valueSuffix={"%"}
-          progressFormatter={(value: number) => {
-            "worklet";
-            return value.toFixed(1); // 1 decimal place
+          showProgressLabel={true}
+          labelStyle={{
+            color: "#27b1fa",
+            fontSize: 24,
+            fontWeight: "600",
           }}
+          showPercentageSymbol={true}
         />
       </View>
       <View className="flex-column justify-start items-start">

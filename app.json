@@ -2,9 +2,9 @@
   "expo": {
     "name": "TeachAssist",
     "slug": "teachassist",
-    "version": "0.1.3",
+    "version": "0.1.5",
     "orientation": "portrait",
-    "icon": "./assets/images/transparent_playstore.png",
+    "icon": "./assets/images/app-play-icon-small.png",
     "scheme": "teachassist",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -13,8 +13,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/transparent_playstore.png",
-        "backgroundColor": "#161616"
+        "foregroundImage": "./assets/images/app-play-icon-small.png",
+        "backgroundColor": "#0c0c0c"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.prmntr.teachassist"

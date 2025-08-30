@@ -1,4 +1,4 @@
-# TeachAssist v0.1.3
+# TeachAssist v0.1.5
 
 A modern mobile app for the YRDSB TeachAssist portal, built with React Native.
 
