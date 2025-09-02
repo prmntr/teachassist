@@ -76,7 +76,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           <Image
             source={require("../../assets/images/caret-arrow-up.png")}
             className="w-4 h-4 object-fill"
-            style={{ tintColor: "#27b1fa" }}
+            style={{ tintColor: "#00d492" }}
           />
         );
       case "down":
@@ -84,7 +84,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           <Image
             source={require("../../assets/images/caret-arrow-down.png")}
             className="w-4 h-4 object-fill"
-            style={{ tintColor: "#27b1fa" }}
+            style={{ tintColor: "#ff6467" }}
           />
         );
       case "same":
@@ -138,11 +138,27 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
       }
 
       // so we save the rn average as last avg
-      await SecureStorage.save(
-        "grade_previous_average",
-        currentAverage.toString()
-      );
-      await SecureStorage.save("grade_last_updated", new Date().toISOString());
+      console.log(previousAverage, currentAverage);
+      // Only update previous average when there's actually a change
+      if (previousAverage !== null && previousAverage !== currentAverage) {
+        // Keep the old previousAverage, don't overwrite it with currentAverage
+        // Only update timestamps
+        await SecureStorage.save(
+          "grade_last_updated",
+          new Date().toISOString()
+        );
+      } else if (previousAverage === null) {
+        // First time setup
+        await SecureStorage.save(
+          "grade_previous_average",
+          currentAverage.toString()
+        );
+        await SecureStorage.save(
+          "grade_last_updated",
+          new Date().toISOString()
+        );
+      }
+      // so we save the rn average as last avg
 
       const gradedCourseCount = courses.filter(
         (course) =>
@@ -195,7 +211,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   }
 
   return (
-    <View className="bg-3 rounded-xl p-4 mt-1 flex-row items-center justify-start">
+    <View className="bg-3 rounded-xl p-4 mt-1 flex-row items-center justify-center">
       <View className="flex-column items-center justify-center mr-5">
         <AnimatedProgressWheel
           size={125}
@@ -226,12 +242,9 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
             <Text
               className={`text-2xl font-bold ml-1 ${getTrendColor(gradeStats.trend)}`}
             >
-              {gradeStats.currentAverage > gradeStats.previousAverage
-                ? "+"
-                : ""}
-              {(gradeStats.currentAverage - gradeStats.previousAverage).toFixed(
-                1
-              )}
+              {Math.abs(
+                gradeStats.currentAverage - gradeStats.previousAverage
+              ).toFixed(1)}
               %
             </Text>
           </View>

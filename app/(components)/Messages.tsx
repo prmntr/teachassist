@@ -22,15 +22,12 @@ function Messages() {
   const preMessage = [
     "Hey, ",
     "Hello, ",
-    "Hi, ",
+    "Hi ",
     "What's up, ",
-    "What's cookin, ",
     "How's it going, ",
     "Greetings, ",
     "Good to see you, ",
-    "",
-    "",
-    "haii ",
+    "Welcome back, "
   ];
 
   const postMessage = [
@@ -39,11 +36,8 @@ function Messages() {
     "!",
     "?",
     "?",
-    "?",
     ".",
     ".",
-    "'s academic comeback",
-    " is locking in",
     "",
   ];
 

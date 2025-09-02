@@ -1,5 +1,5 @@
 import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
+import { useRouter, Link } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,9 +12,9 @@ import {
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
 import { parseStudentGrades, type Course } from "../(components)/CourseParser"; // Update import path
+import GradeAverageTracker from "../(components)/GradeAverage";
 import Messages from "../(components)/Messages";
 import { CourseInfoBox } from "../(components)/QuickCourse";
-import GradeAverageTracker from "../(components)/GradeAverage";
 
 const CoursesScreen = () => {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -128,13 +128,7 @@ const CoursesScreen = () => {
       }
     }
 
-    // Check if this is a test account
-    const savedUsername = await SecureStorage.load("ta_username");
-    if (savedUsername?.includes("123456789")) {
-      setMessage("This is a test account. No courses are available.");
-      setCourses([]);
-      setIsLoading(false);
-    } else if (!savedCoursesJson) {
+    if (!savedCoursesJson) {
       setMessage("Stored courses not found. Trying again...");
       console.warn("Courses not found in storage");
       setIsLoading(true);
@@ -171,13 +165,6 @@ const CoursesScreen = () => {
       router.replace("/signin");
       Alert.alert("Username and password not found. Please log in again.");
     }
-
-    // Handle test account
-    if (savedUsername === "123456789") {
-      console.log(savedUsername);
-      setCourses([]);
-      setIsLoading(false);
-    }
   };
 
   // Filter courses by semester for organization
@@ -202,7 +189,7 @@ const CoursesScreen = () => {
         >
           <Image
             source={require("../../assets/images/refresh.png")}
-            className="w-8 h-8"
+            className="w-7 h-8"
             style={{ tintColor: "#191919" }}
           />
         </TouchableOpacity>
@@ -249,23 +236,28 @@ const CoursesScreen = () => {
           {semester1Courses.length > 0 && (
             <>
               <View className="mt-6">
-                <Text className="text-appwhite/90 text-xl font-semibold mb-2">
-                  Semester 1 ({semester1Courses.length} courses)
+                <Text className="text-appwhite/90 text-xl font-medium">
+                  Semester{" "}
+                  <Text className="text-baccent text-2xl font-bold">1</Text>
+                </Text>
+                <Text className="text-appwhite/60 text-md mb-2">
+                  {semester1Courses.length} courses
                 </Text>
               </View>
               {semester1Courses.map((course) => (
                 <View key={`${course.courseCode}-${course.semester}`}>
                   {course.hasGrade ? (
                     <TouchableOpacity
-                      onPress={() =>
-                        router.replace("/courseview/${course.subjectId}")
-                      }
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        router.replace(`/courseview/${course.subjectId}`);
+                      }}
                     >
-                      <CourseInfoBox courseCode={course.courseCode} />
+                      <CourseInfoBox course={course} />
                     </TouchableOpacity>
                   ) : (
                     <View>
-                      <CourseInfoBox courseCode={course.courseCode} />
+                      <CourseInfoBox course={course} />
                     </View>
                   )}
                 </View>
@@ -277,29 +269,39 @@ const CoursesScreen = () => {
           {semester2Courses.length > 0 && (
             <>
               <View className="mt-6">
-                <Text className="text-appwhite/90 text-xl font-semibold mb-2">
-                  Semester 2 ({semester2Courses.length} courses)
+                <Text className="text-appwhite/90 text-xl font-medium">
+                  Semester{" "}
+                  <Text className="text-baccent text-2xl font-bold">2</Text>
+                </Text>
+                <Text className="text-appwhite/60 text-md mb-2">
+                  {semester2Courses.length} courses
                 </Text>
               </View>
               {semester2Courses.map((course) => (
                 <View key={`${course.courseCode}-${course.semester}`}>
                   {course.hasGrade ? (
                     <TouchableOpacity
-                      onPress={() =>
-                        router.replace("/courseview/${course.subjectId}")
-                      }
+                      onPress={() => {
+                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                        router.replace(`/courseview/${course.subjectId}`);
+                      }}
                     >
-                      <CourseInfoBox courseCode={course.courseCode} />
+                      <CourseInfoBox course={course} />
                     </TouchableOpacity>
                   ) : (
                     <View>
-                      <CourseInfoBox courseCode={course.courseCode} />
+                      <CourseInfoBox course={course} />
                     </View>
                   )}
                 </View>
               ))}
             </>
           )}
+          <Link href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" className="mb-10 mt-3">
+            <Text className="text-appgray text-center text-md underline">
+              Last updated {new Date().toLocaleTimeString()} :{`-)`}
+            </Text>
+          </Link>
         </ScrollView>
       )}
 

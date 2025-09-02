@@ -43,6 +43,18 @@ const Guidance = () => {
         >
           <Text>Rectangle icons created by Freepik - Flaticon</Text>
         </Link>
+        <Link
+          href="https://www.flaticon.com/free-icons/pencil"
+          className="text-appwhite my-2"
+        >
+          <Text>Pencil icons created by Anggara - Flaticon</Text>
+        </Link>
+        <Link
+          href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+          className="text-appwhite my-2 underline"
+        >
+          <Text>You, for using the app 💖</Text>
+        </Link>
       </View>
 
       <Link

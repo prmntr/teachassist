@@ -24,6 +24,7 @@
     "expo-font": "~13.3.2",
     "expo-haptics": "~14.1.4",
     "expo-image": "~2.4.0",
+    "expo-linear-gradient": "~14.1.5",
     "expo-linking": "~7.1.7",
     "expo-router": "~5.1.4",
     "expo-secure-store": "~14.2.3",
@@ -39,13 +40,16 @@
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-gesture-handler": "~2.24.0",
+    "react-native-gifted-charts": "^1.4.64",
     "react-native-progress-wheel": "^2.1.0",
     "react-native-reanimated": "~3.17.4",
-    "react-native-safe-area-context": "^5.4.0",
+    "react-native-safe-area-context": "5.4.0",
     "react-native-screens": "~4.11.1",
+    "react-native-svg": "15.11.2",
     "react-native-web": "~0.20.0",
     "react-native-webview": "13.13.5",
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^3.4.17",
+    "expo-image-picker": "~16.1.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

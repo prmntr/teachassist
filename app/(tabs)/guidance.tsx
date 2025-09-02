@@ -9,8 +9,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import TeachAssistAuthFetcher from "../(auth)/taauth";
+import { useRouter } from "expo-router";
+import TeachAssistAuthFetcher, { AppointmentFormData } from "../(auth)/taauth";
 import AppointmentBooking from "../(components)/AppointmentBooking";
+import AppointmentReasonForm from "../(components)/AppointmentReasonForm";
 
 const Guidance = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -21,6 +23,11 @@ const Guidance = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [bookingUrl, setBookingUrl] = useState<string | null>(null);
   const [bookingResult, setBookingResult] = useState<string | null>(null);
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [appointmentFormHtml, setAppointmentFormHtml] = useState<string>("");
+  const router = useRouter();
+  const [formSubmissionData, setFormSubmissionData] =
+    useState<AppointmentFormData | null>(null);
 
   const handleDateChange = (event: any, date?: Date) => {
     setShowDatePicker(false);
@@ -32,6 +39,7 @@ const Guidance = () => {
   const checkGuidanceAvailability = () => {
     setError(null);
     setGuidanceResult(null);
+    setShowAppointmentForm(false);
     setShowFetcher(true);
   };
 
@@ -47,26 +55,61 @@ const Guidance = () => {
     setShowFetcher(false);
   };
 
+  // Check if the result is an appointment form
+  const isAppointmentForm = (html: string): boolean => {
+    return (
+      html.includes('name="reason"') &&
+      html.includes('type="radio"') &&
+      html.includes("Submit Reason")
+    );
+  };
+
   // handle appointment booking using taauth
   const handleAppointmentPress = (link: string) => {
     console.log("Booking appointment with link:", link);
     setBookingUrl(link);
     setIsLoading(true);
+    setShowAppointmentForm(false);
   };
 
   const handleBookingResult = (result: string) => {
-    console.log("booking result:", result);
+    console.log("Booking result:", result);
+
+    // Check if the result is a form that needs to be filled
+    if (isAppointmentForm(result)) {
+      console.log("Form detected, showing appointment form");
+      setAppointmentFormHtml(result);
+      setShowAppointmentForm(true);
+      setBookingUrl(null);
+      setIsLoading(false);
+      return;
+    }
+
+    // Handle final booking result
     if (result.includes("successfully")) {
       Alert.alert(
         "Appointment Successful",
-        `You have now been booked for a guidance appointment on ${selectedDate}.`
+        `You have been booked for a guidance appointment on ${selectedDate.toLocaleDateString(
+          "en-GB",
+          {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          }
+        )}.`
       );
+      // Refresh the guidance data to show updated availability
+      setTimeout(() => {
+        checkGuidanceAvailability();
+      }, 1000);
     }
+
     setBookingResult(result);
     setBookingUrl(null);
     setIsLoading(false);
+    setShowAppointmentForm(false);
 
-    // Clear booking result after 3 secs
+    // Clear booking result after 3 seconds
     setTimeout(() => {
       setBookingResult(null);
     }, 3000);
@@ -77,6 +120,71 @@ const Guidance = () => {
     setBookingResult(`Booking error: ${error}`);
     setBookingUrl(null);
     setIsLoading(false);
+    setShowAppointmentForm(false);
+
+    // Clear booking result after 3 seconds
+    setTimeout(() => {
+      setBookingResult(null);
+    }, 3000);
+  };
+
+  // Handle form submission
+  const handleFormSubmit = (formData: AppointmentFormData) => {
+    console.log("Submitting form data:", formData);
+    setFormSubmissionData(formData);
+    setShowAppointmentForm(false);
+    setIsLoading(true);
+  };
+
+  // Handle form cancellation
+  const handleFormCancel = () => {
+    setShowAppointmentForm(false);
+    setAppointmentFormHtml("");
+    setBookingResult("Appointment booking cancelled.");
+
+    // Clear result after 2 seconds
+    setTimeout(() => {
+      setBookingResult(null);
+    }, 2000);
+  };
+
+  // Handle form submission result
+  const handleFormSubmissionResult = (result: string) => {
+    console.log("Form submission result:", result);
+
+    if (result.includes("successfully")) {
+      Alert.alert(
+        "Appointment Successful",
+        `Your guidance appointment has been booked for ${selectedDate.toLocaleDateString(
+          "en-GB",
+          {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          }
+        )}.`
+      );
+      // Refresh the guidance data to show updated availability
+      setTimeout(() => {
+        checkGuidanceAvailability();
+      }, 1000);
+    }
+
+    setBookingResult(result);
+    setFormSubmissionData(null);
+    setIsLoading(false);
+
+    // Clear booking result after 3 seconds
+    setTimeout(() => {
+      setBookingResult(null);
+    }, 3000);
+  };
+
+  const handleFormSubmissionError = (error: string) => {
+    console.error("Form submission error:", error);
+    setBookingResult(`Form submission error: ${error}`);
+    setFormSubmissionData(null);
+    setIsLoading(false);
 
     // Clear booking result after 3 seconds
     setTimeout(() => {
@@ -85,7 +193,18 @@ const Guidance = () => {
   };
 
   const renderGuidanceContent = () => {
-    if (isLoading && !bookingUrl) {
+    // Show appointment reason form if needed
+    if (showAppointmentForm && appointmentFormHtml) {
+      return (
+        <AppointmentReasonForm
+          html={appointmentFormHtml}
+          onSubmit={handleFormSubmit}
+          onCancel={handleFormCancel}
+        />
+      );
+    }
+
+    if (isLoading && !bookingUrl && !formSubmissionData) {
       return (
         <ScrollView
           className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
@@ -114,7 +233,9 @@ const Guidance = () => {
             className={`text-center mt-2 text-lg ${
               bookingResult.includes("successfully")
                 ? "text-emerald-400"
-                : "text-red-400"
+                : bookingResult.includes("cancelled")
+                  ? "text-yellow-400"
+                  : "text-red-400"
             }`}
           >
             {bookingResult}
@@ -123,14 +244,18 @@ const Guidance = () => {
       );
     }
 
-    if (isLoading && bookingUrl) {
+    if (isLoading && (bookingUrl || formSubmissionData)) {
+      const loadingText = formSubmissionData
+        ? "Submitting appointment request..."
+        : "Booking appointment...";
+
       return (
         <ScrollView
           className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
           showsVerticalScrollIndicator={false}
         >
           <Text className="text-appwhite text-center mt-2 text-lg">
-            Booking appointment...
+            {loadingText}
           </Text>
         </ScrollView>
       );
@@ -156,7 +281,7 @@ const Guidance = () => {
               style={{ tintColor: "#27b1fa" }}
             />
             <Text className="text-red-700 text-center text-xl font-semibold">
-              An error occured: {error}
+              An error occurred: {error}
             </Text>
           </View>
         </ScrollView>
@@ -182,7 +307,7 @@ const Guidance = () => {
               className=" w-30 h-30 my-3"
               style={{ tintColor: "#27b1fa" }}
             />
-            <Text className="text-appwhite text-center text-xl font-semibold">
+            <Text className="text-appwhite text-center text-xl">
               {selectedDate.toLocaleDateString("en-GB", {
                 day: "2-digit",
                 month: "2-digit",
@@ -205,14 +330,14 @@ const Guidance = () => {
       );
     }
 
-    // Check for maybe appt data
+    // Check for appointment data
     if (
       guidanceResult &&
       !guidanceResult.includes("Login Failed") &&
       guidanceResult !== "NOT A SCHOOL DAY" &&
       guidanceResult.includes("<")
     ) {
-      // use appt booking component
+      // use appointment booking component
       return (
         <AppointmentBooking
           html={guidanceResult}
@@ -226,16 +351,14 @@ const Guidance = () => {
       !guidanceResult.includes("Login Failed") &&
       guidanceResult !== "NOT A SCHOOL DAY"
     ) {
-      // from before
+      // fallback for unexpected format
       return (
         <ScrollView
           className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
           showsVerticalScrollIndicator={false}
         >
-          <Text className="text-sm text-appwhite">
-            There are guidance appointments available! Go to the TeachAssist
-            Website to register.
-            {guidanceResult.replace(/<[^>]*>/g, "").trim()}
+          <Text className="text-md text-appwhite">
+            {guidanceResult.replace(/<[^>]*>/g, "").trim() +"\n\n"}Relaunch the app.
           </Text>
         </ScrollView>
       );
@@ -262,9 +385,24 @@ const Guidance = () => {
 
   return (
     <View className="flex-1 bg-2 px-5">
-      <Text className="text-5xl font-semibold text-appwhite mt-18">
-        Guidance
-      </Text>
+      <View className="flex-row items-center justify-between mt-18">
+        <Text className="text-5xl font-semibold text-appwhite">Guidance</Text>
+        <TouchableOpacity
+          onPress={() => {
+            router.replace("/AppointmentsPage");
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          }}
+          disabled={isLoading}
+        >
+          <View className="bg-baccent/80 text-appwhite p-2 text-center rounded-lg font-medium text-lg px-3">
+            <Image
+              source={require("../../assets/images/upcoming-calendar-icon.png")}
+              className="w-7 h-8"
+              style={{ tintColor: "#edebea" }}
+            />
+          </View>
+        </TouchableOpacity>
+      </View>
       <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center mt-4">
         <View className="items-center">
           <Text className="text-appwhite text-xl mb-2">
@@ -285,28 +423,35 @@ const Guidance = () => {
             />
           )}
         </View>
-        <TouchableOpacity
-          onPress={() => {
-            setShowDatePicker(true);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }}
-          disabled={isLoading}
-        >
-          <Text className="bg-baccent/20 border-baccent/30 border text-baccent/80 mt-3 p-2 text-center rounded-lg font-medium text-lg">
-            Choose a Date
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            checkGuidanceAvailability();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }}
-          disabled={isLoading}
-        >
-          <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 mt-3 p-2 text-center rounded-lg font-medium text-lg">
-            Check Availability
-          </Text>
-        </TouchableOpacity>
+        <View className="flex-row justify-between">
+          <TouchableOpacity
+            onPress={() => {
+              setShowDatePicker(true);
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }}
+            disabled={isLoading}
+            className="flex-1 mr-2"
+          >
+            <Text className="bg-4 text-appwhite mt-3 p-2 pb-3 text-center rounded-lg text-lg">
+              Choose a Date
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              checkGuidanceAvailability();
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }}
+            disabled={isLoading}
+          >
+            <View className="bg-baccent/80  text-appwhite mt-3 p-2 text-center rounded-lg font-medium text-lg px-3">
+              <Image
+                source={require("../../assets/images/calendar-icon.png")}
+                className="w-6 h-8"
+                style={{ tintColor: "#edebea" }}
+              />
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
       {renderGuidanceContent()}
       {showFetcher && (
@@ -322,6 +467,14 @@ const Guidance = () => {
           bookAppointment={bookingUrl}
           onResult={handleBookingResult}
           onError={handleBookingError}
+          onLoadingChange={setIsLoading}
+        />
+      )}
+      {formSubmissionData && (
+        <TeachAssistAuthFetcher
+          submitAppointmentForm={formSubmissionData}
+          onResult={handleFormSubmissionResult}
+          onError={handleFormSubmissionError}
           onLoadingChange={setIsLoading}
         />
       )}

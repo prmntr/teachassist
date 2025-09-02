@@ -142,7 +142,7 @@ const InitialRoute = () => {
           />
         </View>
       </TouchableOpacity>
-      <Text className="text-gray-600 text-xl absolute bottom-4">v0.1.5</Text>
+      <Text className="text-gray-600 text-xl absolute bottom-4">v1.0.0</Text>
     </View>
   );
 };

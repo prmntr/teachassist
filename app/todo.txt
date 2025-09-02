@@ -2,15 +2,9 @@ TODO LIST
 
 - migrate from touchable to TouchableOpacity
 - custom assignments
-- course charts
+- fix course charts
 - why is gluestack not working it worked on all my other projects
-
 - make haptic feedback more pronounced too soft
-- APP ICON LOOKS LIKE SHIT
 - edit error messages
-
-- use safeareas
-
+- use safeareas (maybe done)
 - flag is // 1
-
-- fix guidance; wont work for schools which have more dumb forms

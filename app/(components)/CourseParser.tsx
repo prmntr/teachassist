@@ -210,9 +210,11 @@ function parseCourseInfo(text: string, course: Partial<Course>): void {
 
     if (courseCode) course.courseCode = courseCode;
     if (courseName) {
-      if (courseName.includes("Block")) {
+      if (courseCode.toLowerCase().includes("lunch")) {
         course.courseName = "Lunch";
-      } else {
+      } else if (courseName.includes("Block")) {
+        course.courseName = courseCode; // no course name
+      } else{
         course.courseName = courseName;
       }
     }
@@ -265,7 +267,8 @@ function parseGradeInfo(
   // check if no marks yet
   if (text.includes("Please see teacher for current status")) {
     course.grade = "See teacher";
-    course.hasGrade = false;
+    course.hasGrade = false; // modify change here
+    course.subjectId = gradeLink;
   } else if (gradeLink) {
     // get grade percentage ex "Course Mark: 97.8%"
     const gradeMatch = text.match(/Course Mark:\s*(\d+\.?\d*%)/);

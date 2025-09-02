@@ -20,11 +20,13 @@ interface AppointmentBookingProps {
   onAppointmentPress: (link: string) => void;
 }
 
+// booking component to show dates + people
+
 const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
   html,
   onAppointmentPress,
 }) => {
-  // date has to be rendered here b/c if date is changed the component won't refresh and this is easier than using a useeffect
+  // get date from html
   const extractDate = (htmlContent: string): string => {
     const dateMatch = htmlContent.match(
       /Appointment Bookings on (\d{4}-\d{2}-\d{2})/
@@ -42,21 +44,21 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     while ((counselorMatch = counselorRegex.exec(htmlContent)) !== null) {
       const baseName = counselorMatch[1].trim();
       const guidanceLetters = counselorMatch[2]; // could be undefined if no letters
-      const appointmentSection = counselorMatch[3]; // updated index since we added another capture group
+      const appointmentSection = counselorMatch[3];
 
-      // bss has letters guidance so
+      // some schools have last name based people
       const counselorName = guidanceLetters
         ? `${baseName} (${guidanceLetters})`
         : baseName;
 
-      // get link for each person
+      // get appointment links and times
       const linkRegex = /<a href="([^"]+)">@\s*(\d{2}:\d{2}:\d{2})<\/a>/g;
       let linkMatch;
 
       while ((linkMatch = linkRegex.exec(appointmentSection)) !== null) {
         const link = linkMatch[1];
         const time = linkMatch[2];
-        // id
+        // Extract ID from link for unique identification
         const idMatch = link.match(/id=(\d+)/);
         const id = idMatch ? idMatch[1] : Math.random().toString();
 
@@ -68,7 +70,8 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
         });
       }
     }
-    // sort by time; should already be done
+
+    // sort by time, should already be sorted
     appointments.sort((a, b) => a.time.localeCompare(b.time));
 
     return appointments;
@@ -81,7 +84,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Alert.alert(
       "Book Appointment",
-      `Book with ${appointment.counselorName} at ${appointment.time}?`,
+      `Book with ${appointment.counselorName} at ${formatTime(appointment.time)}?`,
       [
         {
           text: "Cancel",
@@ -99,12 +102,13 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     );
   };
 
-  // format time
+  // remove seconds
   const formatTime = (time: string): string => {
-    return time.substring(0, 5); // dont show seconds
+    return time.substring(0, 5);
+    // not adding appt duration because we dont know how long each lasts; councillors have lives
   };
 
-  // grouped by councellor
+  // group appointments by counselor
   const groupedAppointments = appointments.reduce(
     (groups, appointment) => {
       const counselor = appointment.counselorName;
@@ -117,6 +121,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     {} as Record<string, Appointment[]>
   );
 
+  // Handle special cases
   if (html.includes("NOT A SCHOOL DAY")) {
     return (
       <ScrollView
@@ -129,12 +134,11 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           </Text>
           <Image
             source={require("../../assets/images/not_found.png")}
-            className=" w-30 h-30 my-3"
+            className="w-30 h-30 my-3"
             style={{ tintColor: "#27b1fa" }}
           />
           <Text className="text-appwhite text-center text-lg">
-            {date + ` `}
-            is not a school day.{`\n`}Choose another date and try again.
+            {date} is not a school day.{"\n"}Choose another date and try again.
           </Text>
         </View>
       </ScrollView>
@@ -144,17 +148,20 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
   if (appointments.length === 0) {
     return (
       <ScrollView
-        className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
+        className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full"
         showsVerticalScrollIndicator={false}
       >
-        <View className="flex items-center justify-center mt-10">
+        <View className="flex items-center justify-center">
+          <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
+            {date}
+          </Text>
           <Image
             source={require("../../assets/images/not_found.png")}
-            className=" w-30 h-30 my-3"
+            className="w-30 h-30 my-3"
             style={{ tintColor: "#27b1fa" }}
           />
           <Text className="text-appwhite text-center text-lg">
-            No appointments are currently available for {date + ". \n"} Choose
+            No appointments are currently available for {date}.{"\n"}Choose
             another date and try again.
           </Text>
         </View>
@@ -179,14 +186,18 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           Choose a time slot to book an appointment.
         </Text>
       </View>
+
+      {/* may break but probably not this site sucks */}
       {Object.keys(groupedAppointments).some((name) => name.includes("(")) && (
-        <View>
-          <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 p-2 px-3 text-center rounded-lg font-medium mb-4">
-            Your school has last name based councillors! Remember to choose the
-            councillor corresponding to your last name.
+        <View className="mb-4">
+          <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 p-2 px-3 text-center rounded-lg font-medium">
+            Your school has last name based counselors! Remember to choose the
+            counselor corresponding to your last name.
           </Text>
         </View>
       )}
+
+      {/* Render appts grouped by counselor */}
       {Object.entries(groupedAppointments).map(
         ([counselorName, counselorAppointments]) => (
           <View key={counselorName} className="mb-6">
@@ -198,10 +209,10 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                 <TouchableOpacity
                   key={appointment.id}
                   onPress={() => handleAppointmentPress(appointment)}
-                  className="bg-blue-500/20 border-blue-500/30 border px-4 py-3 rounded-lg flex-1"
+                  className="bg-4 px-4 py-3 rounded-lg flex-1"
                   style={{ minWidth: 100, maxWidth: "45%" }}
                 >
-                  <Text className="text-blue-400 font-medium text-center">
+                  <Text className="text-appwhite font-medium text-center">
                     {formatTime(appointment.time)}
                   </Text>
                 </TouchableOpacity>
