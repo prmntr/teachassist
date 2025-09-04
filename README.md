@@ -1,6 +1,26 @@
-# TeachAssist v1.0.0
-
-A modern mobile app for the YRDSB TeachAssist portal, built with React Native.
+<p align="center">
+ <img width="75px" src="https://i.ibb.co/Y4jHWF3s/transparent-ta-icon.png" style="display: block; margin: 0 auto;" />
+ <h1 align="center">TeachAssist: YRDSB Mobile</h1>
+ <p align="center">A modern mobile app for the YRDSB TeachAssist portal, built with React Native.</p>
+ <div align="center">
+   <a href="https://play.google.com/store/apps/details?id=com.prmntr.teachassist">
+     <img src="https://i.ibb.co/sr86bN4/image.png" height="40"/>
+   </a>
+ </div>
+ <div style="padding-top: 10px;"> 
+   <p align="center">
+    <a href="https://play.google.com/store/apps/details?id=com.prmntr.teachassist">Download</a>
+    ·
+    <a href="https://prmntr.com/teachassist">Website</a>
+    ·
+    <a href="https://forms.gle/BECBr8LqgtnzzHqS6">Report Bug</a>
+    ·
+    <a href="https://github.com//prmntr/teachassist/issues/new?assignees=&labels=enhancement&projects=&template=feature_request.yml">Request Feature</a>
+    ·
+    <a href="https://prmntr.com/teachassist/privacy">Privacy Policy</a>
+  </p>
+ </div>
+</p>
 
 ## Overview
 
@@ -18,8 +38,7 @@ TeachAssist provides students with an open source streamlined mobile experience 
 - 📈 **Trend Analysis** - Track your progress over time with detailed analytics
 
 ### Coming Soon
-- 🔮 **Performance Prediction** - AI-powered insights to predict future academic performance (TBD)
-- 🥇 **Grade Comparison** - Compare your perforance with those of your peers (TBD)
+- 🔮 **Performance Prediction** - Edit and add assignments to predict course performance
 
 ## Screenshots
 
@@ -43,7 +62,9 @@ TeachAssist provides students with an open source streamlined mobile experience 
 ## Installation
 
 ### For Users
-The app will be available on the Google Play Store. iOS support is being considered.
+- **Android: [Play Store](https://play.google.com/store/apps/details?id=com.prmntr.teachassist)**
+- **Web: [TeachAssist](https://prmntr.com/teachassist)**
+- **iOS: [Coming Soon](/)**
 
 ### For Developers
 
@@ -96,12 +117,6 @@ Contributions are welcomed. Here's how you can help:
 6. **Push to the branch**: `git push origin feature/amazing-feature`
 7. **Open a Pull Request**: Describe your changes and their benefits
 
-### Development Guidelines
-- Follow React Native and Expo best practices
-- Write clear, commented code
-- Test on both iOS and Android platforms
-- Update documentation for any new features
-
 ## Disclaimer
 
 This app is an unofficial mobile client for the YRDSB TeachAssist portal. It is not affiliated with, endorsed by, or officially connected to the York Region District School Board. All academic data is retrieved directly from the official ta.yrdsb.ca portal. I am not responsible for any information displayed on the app.
@@ -115,7 +130,7 @@ If you encounter any issues or have questions:
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENCE](LICENCE) file for details.
 
 ## Acknowledgments
 
@@ -125,4 +140,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**Made with ❤️ for YRDSB students**
+**Made with ☕**
