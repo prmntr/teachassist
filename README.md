@@ -1,10 +1,11 @@
 <p align="center">
  <img width="75px" src="https://i.ibb.co/Y4jHWF3s/transparent-ta-icon.png" style="display: block; margin: 0 auto;" />
  <h1 align="center">TeachAssist: YRDSB Mobile</h1>
- <p align="center">A modern mobile app for the YRDSB TeachAssist portal, built with React Native.</p>
+ <p align="center">An unofficial mobile app for the YRDSB TeachAssist portal, built with React Native.</p>
+ <p align="center">**Not affiliated with YRDSB or The TeachAssist Foundation**</p>
  <div align="center">
    <a href="https://play.google.com/store/apps/details?id=com.prmntr.teachassist">
-     <img src="https://i.ibb.co/sr86bN4/image.png" height="40"/>
+     <img src="https://i.ibb.co/sr86bN4/image.png" height="45"/>
    </a>
  </div>
  <div style="padding-top: 10px;"> 
@@ -117,10 +118,6 @@ Contributions are welcomed. Here's how you can help:
 6. **Push to the branch**: `git push origin feature/amazing-feature`
 7. **Open a Pull Request**: Describe your changes and their benefits
 
-## Disclaimer
-
-This app is an unofficial mobile client for the YRDSB TeachAssist portal. It is not affiliated with, endorsed by, or officially connected to the York Region District School Board. All academic data is retrieved directly from the official ta.yrdsb.ca portal. I am not responsible for any information displayed on the app.
-
 ## Support
 
 If you encounter any issues or have questions:
@@ -128,16 +125,14 @@ If you encounter any issues or have questions:
 - 💡 **Feature Requests**: Submit an issue with the "enhancement" label
 - 📧 **Contact**: [Google Forms](https://forms.gle/BECBr8LqgtnzzHqS6)
 
+## Disclaimer
+
+**This app is an unofficial mobile client for the YRDSB TeachAssist portal. It is not affiliated with, endorsed by, or officially connected to the York Region District School Board or The TeachAssist Foundation. All academic data is retrieved directly from the official ta.yrdsb.ca portal. I am not responsible for any information displayed on the app. USE THIS APP AT YOUR OWN RISK!**
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENCE](LICENCE) file for details.
 
-## Acknowledgments
-
-- York Region District School Board for providing the TeachAssist portal
-- The React Native and Expo communities for their excellent documentation and tools
-- You, for scrolling all the way down!
-
 ---
 
-**Made with ☕**
+**Made with ☕📜**
