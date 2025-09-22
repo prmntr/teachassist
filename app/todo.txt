@@ -1,10 +1,17 @@
 TODO LIST
 
-- migrate from touchable to TouchableOpacity
-- custom assignments
-- fix course charts
+- migrate from TouchableOpacity to touchable
 - why is gluestack not working it worked on all my other projects
-- make haptic feedback more pronounced too soft
+- make haptic feedback more pronounced too soft some models maybe idk
 - edit error messages
 - use safeareas (maybe done)
 - flag is // 1
+
+- refreshcontrol flatlist etc
+
+modal problems
+
+clean up comments and code remove redundant stuff (never happening)
+
+i'm prob not adding ios support, 99 dollas is EXPENSIVE
+

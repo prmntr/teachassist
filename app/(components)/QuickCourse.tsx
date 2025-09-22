@@ -1,7 +1,8 @@
 import { useMemo } from "react";
 import { Text, View } from "react-native";
-import { Course } from "./CourseParser";
 import AnimatedProgressWheel from "react-native-progress-wheel";
+import { useTheme } from "../contexts/ThemeContext";
+import { Course } from "./CourseParser";
 
 interface CourseInfoBoxProps {
   course: Course; // pass the course directly instead of loading it
@@ -19,8 +20,9 @@ interface DisplayCourse {
 }
 
 export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
+  const { isDark } = useTheme();
   const displayCourse = useMemo((): DisplayCourse => {
-    // Convert Course to DisplayCourse format
+    // change course to displaycourse
     return {
       courseName: course.courseName,
       courseCode: course.courseCode,
@@ -42,31 +44,43 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
     (!displayCourse.hasGrade && displayCourse.courseMark === "See teacher")
   ) {
     return (
-      <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
-        <View className="mb-2">
-          <View className="flex-row items-center justify-start">
-            <View className="w-2 h-2 bg-gray-400 rounded-full mr-2" />
-            <Text className="text-appwhite/60 text-sm">
+      <View
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-md w-full`}
+      >
+        <View className={`mb-2`}>
+          <View className={`flex-row items-center justify-start`}>
+            <View className={`w-2 h-2 bg-gray-400 rounded-full mr-2`} />
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm`}
+            >
               Grades Not Available
             </Text>
           </View>
-          <Text className="text-appwhite text-2xl font-bold mb-1">
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold mb-1`}
+          >
             {displayCourse?.courseName || "Course Not Found"}
           </Text>
           {displayCourse && (
-            <Text className="text-appwhite/80 text-sm mb-2">
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm mb-2`}
+            >
               {displayCourse.courseCode} • Semester {displayCourse.semester}
             </Text>
           )}
         </View>
 
-        <View className="flex-row justify-center items-center">
-          <View className="flex-1">
-            <View className="bg-gray-500/20 rounded-lg p-4 border border-gray-500/30">
-              <Text className="text-gray-400/80 text-sm font-medium mb-1 text-center">
+        <View className={`flex-row justify-center items-center`}>
+          <View className={`flex-1`}>
+            <View
+              className={`bg-gray-500/20 rounded-lg p-4`}
+            >
+              <Text
+                className={`text-gray-400/80 text-sm font-medium mb-1 text-center`}
+              >
                 Current Status
               </Text>
-              <Text className="text-gray-400 text-lg font-medium text-center">
+              <Text className={`text-gray-400 text-lg font-medium text-center`}>
                 Please see teacher for current status regarding achievement in
                 this course
               </Text>
@@ -76,8 +90,7 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
       </View>
     );
   }
-
-  // Helper function to get performance status
+  
   const getPerformanceStatus = (mark: string): string => {
     const numericMark = parseFloat(mark.replace("%", ""));
     if (isNaN(numericMark)) {
@@ -90,36 +103,45 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
       return "No Grade Available Yet";
     }
 
-    if (numericMark >= 80) return "Excellent Performance";
+    if (numericMark >= 90) return "Excellent Performance";
+    if (numericMark >= 80) return "Strong Performance";
     if (numericMark >= 70) return "Good Performance";
-    if (numericMark >= 60) return "Satisfactory Performance";
+    if (numericMark >= 50) return "Satisfactory Performance";
     return "Needs Improvement";
   };
 
   return (
-    <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full flex-row items-center justify-between flex-wrap">
-      <View className="flex-1 min-w-0 pr-4">
-        <View className="flex-row items-center justify-start mb-1">
-          <View className="w-2 h-2 bg-baccent rounded-full mr-2" />
-          <Text className="text-appwhite/60 text-sm">
+    <View
+      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 shadow-md w-full flex-row items-center justify-between flex-wrap`}
+    >
+      <View className={`flex-1 min-w-0 pr-4`}>
+        <View className={`flex-row items-center justify-start mb-1`}>
+          <View className={`w-2 h-2 bg-baccent rounded-full mr-2`} />
+          <Text
+            className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-light`}
+          >
             {getPerformanceStatus(displayCourse.courseMark)}
           </Text>
         </View>
-        <Text className="text-appwhite">Period {displayCourse.block}</Text>
-        <Text className="text-appwhite text-2xl font-bold">
+        <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
+          Period {displayCourse.block}
+        </Text>
+        <Text
+          className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold`}
+        >
           {displayCourse.courseName}
         </Text>
-        <Text className="text-baccent/90 text-lg">
+        <Text className={`text-baccent/90 text-lg`}>
           {displayCourse.courseCode} • Room {displayCourse.room}
         </Text>
         {displayCourse.termMark &&
           (() => {
             return (
               <View
-                className="bg-emerald-500/20 rounded-lg px-3 py-1 border border-emerald-500/30 mt-1"
+                className={`bg-success/20 rounded-lg px-3 py-1 mt-1`}
                 style={{ alignSelf: "flex-start" }}
               >
-                <Text className="text-emerald-400/80 text-sm font-medium">
+                <Text className={`text-success/80 text-sm font-medium`}>
                   Term Mark: {displayCourse.courseMark}
                 </Text>
               </View>
@@ -127,21 +149,23 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
           })()}
       </View>
 
-      <View className="flex-row justify-end items-end flex-shrink-0">
+      <View className={`flex-row justify-end items-end flex-shrink-0`}>
         <View>
           {(() => {
-            const mark = parseFloat(displayCourse.courseMark) || 0;
+            const mark = parseFloat(displayCourse.courseMark);
+            // sorry about the progress
             return (
               <AnimatedProgressWheel
                 size={90}
                 width={13}
-                color={"#2faf7f"}
-                backgroundColor={"#292929"}
-                progress={!mark || mark === 0 ? NaN : mark}
+                color={mark >= 50 ? "#2faf7f" : "#d6363f"}
+                backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                progress={mark === 999 ? NaN : mark}
                 max={100}
                 rounded={true}
                 rotation={"-90deg"}
                 duration={400}
+                delay={75}
                 showProgressLabel={true}
                 labelStyle={{
                   color: "#2faf7f",
@@ -169,6 +193,7 @@ export const QuickCourse = ({
   courseCode,
   subjectId,
 }: QuickCourseProps) => {
+  const { isDark } = useTheme();
   const selectedCourse = useMemo((): Course | null => {
     if (courses.length === 0) return null;
 
@@ -197,8 +222,12 @@ export const QuickCourse = ({
 
   if (!selectedCourse) {
     return (
-      <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full">
-        <Text className="text-appwhite text-center">
+      <View
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-md w-full`}
+      >
+        <Text
+          className={`${isDark ? "text-appwhite" : "text-appblack"} text-center`}
+        >
           Course not found. Check your internet connection and try again.
         </Text>
       </View>

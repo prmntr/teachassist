@@ -3,7 +3,6 @@ import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Text,
   TextInput,
@@ -11,7 +10,8 @@ import {
   View,
 } from "react-native";
 import TeachAssistAuthFetcher from "../(auth)/taauth";
-
+import { useTheme } from "../contexts/ThemeContext";
+import BackButton from "../(components)/Back";
 // Sign in screen
 
 const SignInScreen = () => {
@@ -21,6 +21,7 @@ const SignInScreen = () => {
   const [message, setMessage] = useState("");
 
   const router = useRouter();
+  const { isDark } = useTheme();
 
   // simple client side error checking
   const handleLogin = () => {
@@ -62,31 +63,23 @@ const SignInScreen = () => {
     setIsLoading(loading);
   };
 
-  useEffect(() => {
-  }, []);
+  useEffect(() => {}, []);
 
   return (
-    <View className="flex-1 justify-center items-center bg-1 px-6">
-      <TouchableOpacity
-        className="absolute top-15 left-5 flex flex-row items-center gap-2 bg-gray-700/80 rounded-lg px-4 py-2 shadow-lg"
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.replace("/messages");
-        }}
+    <View
+      className={`flex-1 justify-center items-center ${isDark ? "bg-dark1" : "bg-light1"} px-6`}
+    >
+      <BackButton path={"/messages"} />
+      <Text
+        className={`text-4xl font-bold ${isDark ? "text-appwhite" : "text-appblack"} mb-2 text-center`}
       >
-        <Image
-          className="w-8 h-8"
-          style={{ tintColor: "#edebea" }}
-          source={require("../../assets/images/arrow-icon-left.png")}
-        />
-        <Text className="text-white font-semibold text-lg">Back</Text>
-      </TouchableOpacity>
-      <Text className="text-4xl font-bold text-appwhite mb-2 text-center">
-        Sign in to <Text className="text-baccent">TeachAssist</Text>
+        Sign in to <Text className={`text-baccent`}>TeachAssist</Text>
       </Text>
       {/* conditional render */}
       {message ? (
-        <Text className="text-appwhite mb-4 mt-2 text-md text-center bg-danger rounded-lg w-full py-2">
+        <Text
+          className={`text-appwhite mb-4 mt-2 text-md text-center bg-danger rounded-lg w-full py-2`}
+        >
           {message}
         </Text>
       ) : (
@@ -94,7 +87,7 @@ const SignInScreen = () => {
       )}
 
       <TextInput
-        className="w-full bg-4 text-white rounded-lg px-4 py-4 mb-4"
+        className={`w-full ${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded-lg px-4 py-4 mb-4`}
         placeholder="Student ID"
         placeholderTextColor="#a1a1aa"
         value={username}
@@ -103,7 +96,7 @@ const SignInScreen = () => {
         editable={!isLoading}
       />
       <TextInput
-        className="w-full bg-4 text-white rounded-lg px-4 py-4 mb-4"
+        className={`w-full ${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded-lg px-4 py-4 mb-4`}
         placeholder="Password"
         placeholderTextColor="#a1a1aa"
         secureTextEntry
@@ -111,21 +104,23 @@ const SignInScreen = () => {
         onChangeText={setPassword}
         editable={!isLoading}
       />
-      <Text className=" text-white mx-2 text-center mb-6 text-sm">
-        {/* <Text className="bg-danger">DISCLAIMER:</Text> This app is not
+      <Text
+        className={` ${isDark ? "text-appwhite" : "text-appblack"} mx-2 text-center mb-6 text-sm`}
+      >
+        {/* <Text className={`bg-danger`}>DISCLAIMER:</Text> This app is not
         sponsored, endorsed by, or affiliated with YRDSB or the TeachAssist
         Foundation. Use at your own risk.*/}
         By using this app, you agree to the TeachAssist{" \n"}
         <Link
           href="https://prmntr.com/teachassist/tos"
-          className="underline text-baccent"
+          className={`underline text-baccent`}
         >
           Terms of Service
         </Link>{" "}
         and{" "}
         <Link
           href="https://prmntr.com/teachassist/privacy"
-          className="underline text-baccent"
+          className={`underline text-baccent`}
         >
           Privacy policy
         </Link>
@@ -133,18 +128,21 @@ const SignInScreen = () => {
       </Text>
       <TouchableOpacity
         disabled={isLoading}
-        className="w-full bg-baccent text-center rounded-lg px-4 py-2 mb-3"
+        className={`w-full bg-baccent text-center rounded-lg px-4 py-2 mb-3`}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           handleLogin();
         }}
       >
-        <Text className="text-white font-bold text-2xl text-center">
+        <Text
+          className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold text-2xl text-center`}
+        >
           Sign In
         </Text>
       </TouchableOpacity>
+      {/*
       <TouchableOpacity
-        className="text-2xl text-center rounded-lg"
+        className={`text-2xl text-center rounded-lg`}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
           Alert.alert(
@@ -153,13 +151,14 @@ const SignInScreen = () => {
           );
         }}
       >
-        <Text className="text-appwhite text-md text-center underline underline-offset-1">
+        <Text className={`${isDark ? "text-appwhite" : "text-appblack"} text-md text-center underline underline-offset-1`}>
           Trouble signing in?
         </Text>
       </TouchableOpacity>
+      */}
 
       {isLoading && (
-        <ActivityIndicator size="large" color="#27b1fa" className="mt-6" />
+        <ActivityIndicator size="large" color="#27b1fa" className={`mt-6`} />
       )}
 
       {/*call auth service*/}

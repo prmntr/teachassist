@@ -1,8 +1,8 @@
 <p align="center">
  <img width="75px" src="https://i.ibb.co/Y4jHWF3s/transparent-ta-icon.png" style="display: block; margin: 0 auto;" />
- <h1 align="center">TeachAssist: YRDSB Mobile</h1>
+ <h1 align="center">TeachAssist: Check Your Grades</h1>
  <p align="center">An unofficial mobile app for the YRDSB TeachAssist portal, built with React Native.</p>
- <p align="center">**Not affiliated with YRDSB or The TeachAssist Foundation**</p>
+ <p align="center">**Not affiliated with YRDSB or The TeachAssist Foundation!**</p>
  <div align="center">
    <a href="https://play.google.com/store/apps/details?id=com.prmntr.teachassist">
      <img src="https://i.ibb.co/sr86bN4/image.png" height="45"/>
@@ -32,25 +32,30 @@ TeachAssist provides students with an open source streamlined mobile experience 
 ### Current Features
 - 📱 **Mobile-Optimized Interface** - Clean, intuitive design built specifically for mobile devices
 - 📊 **Grade Tracking** - View current marks and performance across all classes
+- 📅 **Appointment Booking** - Schedule guidance appointments directly from the app
+- 📈 **Trend Analysis** - Track your progress over time with detailed analytics
+- 🔮 **Performance Prediction** - Edit and add assignments to predict course performance
 - 📝 **Assignment Feedback** - Access detailed feedback on completed assignments
 - 🔐 **Secure Login** - End-to-end encryption with YRDSB credentials
 - ⚡ **Fast Performance** - Quick access to your academic data
-- 📅 **Appointment Booking** - Schedule guidance appointments directly from the app
-- 📈 **Trend Analysis** - Track your progress over time with detailed analytics
 
 ### Coming Soon
-- 🔮 **Performance Prediction** - Edit and add assignments to predict course performance
+- 🔔 **Notifications** - Get notified when your marks change
+- ⏹️ **Widgets** - See your marks at a glance, without ever opening the app
+- 🧑‍💻 **API** - Interface with the TeachAssist website through code, requests, and websockets
+- 🍎 **iOS Support** - Your (hopefully) favourite TeachAssist app, brought to the Apple ecosystem
 
 ## Screenshots
 
 <div class="flex items-center justify-center">
-<img src="https://i.ibb.co/1J2y4p7T/1.png" alt="TeachAssist: Helping you get ahead" width="200"/>
-<img src="https://i.ibb.co/S4H1fcrM/2.png" alt="Stay Informed" width="200"/>
-<img src="https://i.ibb.co/5XYDRRPv/3.png" alt="Stay Intelligent" width="200"/>
-<img src="https://i.ibb.co/Tx5MdRLZ/4.png" alt="Stay Ahead" width="200"/>
-<img src="https://i.ibb.co/4nkP9tLk/5.png" alt="Stay In Touch" width="200"/>
-<img src="https://i.ibb.co/tTZsL1Mg/6.png" alt="Stay Secure" width="200"/>
-<img src="https://i.ibb.co/mdM1bN3/7.png" alt="Stay Private" width="200"/>
+<img src="https://i.ibb.co/nN3z23BC/1.png" alt="TeachAssist: Helping you get ahead" width="200"/>
+<img src="https://i.ibb.co/hRPwrBmn/2.png" alt="Stay Informed" width="200"/>
+<img src="https://i.ibb.co/fVBF8kPy/3.png" alt="Stay Intelligent" width="200"/>
+<img src="https://i.ibb.co/TqDvbhqZ/4.png" alt="Stay Ahead" width="200"/>
+<img src="https://i.ibb.co/ksF9TNQK/5.png" alt="Stay In Touch" width="200"/>
+<img src="https://i.ibb.co/Xx9fXbWs/6.png" alt="Stay Prepared" width="200"/>
+<img src="https://i.ibb.co/PGSL2ZSC/7.png" alt="Stay Private" width="200"/>
+<img src="https://i.ibb.co/rRHnchVn/8.png" alt="Stay Private" width="200"/>
 </div>
 
 ## Privacy & Security

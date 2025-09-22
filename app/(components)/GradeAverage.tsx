@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Image, Text, View } from "react-native";
 import AnimatedProgressWheel from "react-native-progress-wheel";
 import { SecureStorage } from "../(auth)/taauth";
+import { useTheme } from "../contexts/ThemeContext";
 import { Course } from "./CourseParser";
 
 interface GradeStats {
@@ -23,6 +24,8 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   showCourseCount = true,
   showLastUpdated = false,
 }) => {
+  const { isDark } = useTheme();
+
   const [gradeStats, setGradeStats] = useState<GradeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +64,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
       case "up":
         return "text-emerald-400";
       case "down":
-        return "text-red-400";
+        return "text-danger";
       case "same":
         return "text-baccent";
       default:
@@ -75,7 +78,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         return (
           <Image
             source={require("../../assets/images/caret-arrow-up.png")}
-            className="w-4 h-4 object-fill"
+            className={`w-4 h-4 object-fill`}
             style={{ tintColor: "#00d492" }}
           />
         );
@@ -83,7 +86,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         return (
           <Image
             source={require("../../assets/images/caret-arrow-down.png")}
-            className="w-4 h-4 object-fill"
+            className={`w-4 h-4 object-fill`}
             style={{ tintColor: "#ff6467" }}
           />
         );
@@ -91,7 +94,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         return (
           <Image
             source={require("../../assets/images/caret-arrow-none.png")}
-            className="w-4 h-4 object-fill"
+            className={`w-4 h-4 object-fill`}
             style={{ tintColor: "#27b1fa" }}
           />
         );
@@ -99,7 +102,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         return (
           <Image
             source={require("../../assets/images/caret-arrow-up.png")}
-            className="w-4 h-4 object-fill"
+            className={`w-4 h-4 object-fill`}
             style={{ tintColor: "#27b1fa" }}
           />
         );
@@ -124,7 +127,20 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         currentAverage = 0.0;
       }
 
-      // Load previous average
+      // Replace the problematic section with this fixed version:
+
+      // Load the last known current average (to detect actual changes)
+      let lastKnownAverage: number | null = null;
+      try {
+        const lastKnownStr = await SecureStorage.load(
+          "grade_last_known_average"
+        );
+        lastKnownAverage = lastKnownStr ? parseFloat(lastKnownStr) : null;
+      } catch {
+        // no last known average exists
+      }
+
+      // Load the previous average (for trend display - this stays until there's a real change)
       let previousAverage: number | null = null;
       try {
         const previousAverageStr = await SecureStorage.load(
@@ -134,7 +150,46 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           ? parseFloat(previousAverageStr)
           : null;
       } catch {
-        // no previous average exists; fine ok
+        // no previous average exists
+      }
+
+      // Check if this is a REAL change (not just a refresh)
+      const isRealChange =
+        lastKnownAverage !== null && lastKnownAverage !== currentAverage;
+
+      if (isRealChange) {
+        // Real change detected - update the previous average to the last known value
+        if (lastKnownAverage !== null) {
+          await SecureStorage.save(
+            "grade_previous_average",
+            lastKnownAverage.toString()
+          );
+          previousAverage = lastKnownAverage; // Update for current calculation
+        }
+      }
+
+      // Always update the last known current average
+      if (lastKnownAverage !== currentAverage) {
+        await SecureStorage.save(
+          "grade_last_known_average",
+          currentAverage.toString()
+        );
+        await SecureStorage.save(
+          "grade_last_updated",
+          new Date().toISOString()
+        );
+      }
+
+      // Handle first-time setup
+      if (lastKnownAverage === null && previousAverage === null) {
+        await SecureStorage.save(
+          "grade_last_known_average",
+          currentAverage.toString()
+        );
+        await SecureStorage.save(
+          "grade_last_updated",
+          new Date().toISOString()
+        );
       }
 
       // so we save the rn average as last avg
@@ -192,18 +247,19 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
 
   if (loading) {
     return (
-      <View className="bg-3 rounded-xl p-4 mb-4 mt-6 py-9">
-        <Text className="text-appwhite/60 text-center">
-          {/*calculating avg*/}
-        </Text>
+      <View
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mb-4 mt-6 py-9`}
+      >
       </View>
     );
   }
 
   if (error || !gradeStats) {
     return (
-      <View className="bg-3 rounded-xl p-4 mb-4 mt-6">
-        <Text className="text-red-400/80 text-center text-sm">
+      <View
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mb-4 mt-6`}
+      >
+        <Text className={`text-danger text-center text-sm`}>
           {error || "Unable to calculate grade average"}
         </Text>
       </View>
@@ -211,17 +267,20 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   }
 
   return (
-    <View className="bg-3 rounded-xl p-4 mt-1 flex-row items-center justify-center">
-      <View className="flex-column items-center justify-center mr-5">
+    <View
+      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 w-full flex-row items-center justify-between flex-wrap`}
+    >
+      <View className={`flex-column items-center justify-center mr-5`}>
         <AnimatedProgressWheel
           size={125}
           width={13}
           color={"#27b1fa"}
-          backgroundColor={"#292929"}
+          backgroundColor={isDark ? "#232427" : "#e7e7e9"}
           progress={gradeStats.currentAverage}
           max={100}
           rounded={true}
           rotation={"-90deg"}
+          delay={75}
           duration={400}
           showProgressLabel={true}
           labelStyle={{
@@ -232,12 +291,14 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           showPercentageSymbol={true}
         />
       </View>
-      <View className="flex-column justify-start items-start">
-        <Text className="text-appwhite/80 text-lg font-semibold">
+      <View className={`flex-column justify-start items-start`}>
+        <Text
+          className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold`}
+        >
           Grade Average
         </Text>
         {gradeStats.previousAverage !== null && (
-          <View className="flex-row items-center">
+          <View className={`flex-row items-center`}>
             {getTrendIcon(gradeStats.trend)}
             <Text
               className={`text-2xl font-bold ml-1 ${getTrendColor(gradeStats.trend)}`}
@@ -249,15 +310,19 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
             </Text>
           </View>
         )}
-        <View className="flex-column justify-start items-start">
+        <View className={`flex-column justify-start items-start`}>
           {showCourseCount && (
-            <Text className="text-appwhite/50 text-sm">
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
+            >
               Based on {gradeStats.courseCount} course
               {gradeStats.courseCount !== 1 ? "s" : ""}
             </Text>
           )}
           {showLastUpdated && (
-            <Text className="text-appwhite/50 text-sm">
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
+            >
               Last updated{" "}
               {new Date(gradeStats.lastUpdated).toLocaleTimeString()}
             </Text>

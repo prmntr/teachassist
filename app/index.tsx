@@ -10,11 +10,15 @@ import {
   View,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "./(auth)/taauth";
+import { useTheme } from "./contexts/ThemeContext";
 import "./global.css";
 
 // handle login and decide
 const InitialRoute = () => {
   const router = useRouter();
+
+  const { isDark } = useTheme();
+
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [isAutoLoggingIn, setIsAutoLoggingIn] = useState(false);
   const [savedCredentials, setSavedCredentials] = useState<{
@@ -89,16 +93,26 @@ const InitialRoute = () => {
   // show loading spinner at loading
   if (isCheckingAuth || isAutoLoggingIn) {
     return (
-      <View className="flex-1 items-center justify-center bg-1">
+      <View
+        className={`flex-1 items-center justify-center ${isDark ? "bg-dark1" : "bg-light1"}`}
+      >
         <Image
-          source={require("../assets/images/transparent_playstore.png")}
-          className="w-26 h-25 mb-6 object-fill"
+          source={
+            isDark
+              ? require("../assets/images/teach-icon-transparent.png")
+              : require("../assets/images/teach-icon-transparent-light.png")
+          }
+          className={`w-26 h-25 mb-6 object-fill`}
         />
-        <Text className="text-5xl font-bold text-appwhite mb-4">
+        <Text
+          className={`text-5xl font-bold ${isDark ? "text-appwhite" : "text-appblack"} mb-4`}
+        >
           TeachAssist
         </Text>
         <ActivityIndicator size="large" color="#27b1fa" />
-        <Text className="text-appwhite text-md mt-4">
+        <Text
+          className={`${isDark ? "text-appwhite" : "text-appblack"} text-md mt-4`}
+        >
           {isCheckingAuth ? "Checking credentials..." : "Signing you in..."}
         </Text>
 
@@ -116,13 +130,25 @@ const InitialRoute = () => {
 
   // landing page
   return (
-    <View className="flex-1 items-center justify-center bg-1">
+    <View
+      className={`flex-1 items-center justify-center ${isDark ? "bg-dark1" : "bg-light1"}`}
+    >
       <Image
-        source={require("../assets/images/transparent_playstore.png")}
-        className="w-22 h-22 mb-6 object-fill"
+        source={
+          isDark
+            ? require("../assets/images/teach-icon-transparent.png")
+            : require("../assets/images/teach-icon-transparent-light.png")
+        }
+        className={`w-22 h-22 mb-6 object-fill`}
       />
-      <Text className="text-5xl font-bold text-appwhite">TeachAssist</Text>
-      <Text className="text-appwhite text-md font-semibold italic mb-15">
+      <Text
+        className={`text-5xl font-bold ${isDark ? "text-appwhite" : "text-appblack"}`}
+      >
+        TeachAssist
+      </Text>
+      <Text
+        className={`${isDark ? "text-appwhite" : "text-appblack"} text-md font-semibold italic mb-15`}
+      >
         Helping you get ahead.
       </Text>
       <TouchableOpacity
@@ -131,18 +157,22 @@ const InitialRoute = () => {
           router.replace("/messages");
         }}
       >
-        <View className="bg-baccent px-5 py-3 rounded-xl shadow-lg flex-row items-center">
-          <Text className="text-appwhite font-semibold text-3xl mr-2">
+        <View
+          className={`bg-baccent/85 px-5 py-3 rounded-xl shadow-lg flex-row items-center`}
+        >
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
+          >
             Get Started
           </Text>
           <Image
-            className="w-8 h-8"
-            style={{ tintColor: "#edebea" }}
+            className={`w-8 h-8`}
+            tintColor={isDark ? "#fafafa" : "#2f3035"}
             source={require("../assets/images/arrow-icon.png")}
           />
         </View>
       </TouchableOpacity>
-      <Text className="text-gray-600 text-xl absolute bottom-4">v1.0.0</Text>
+      <Text className={`text-gray-600 text-2xl absolute bottom-5`}>v1.1.0</Text>
     </View>
   );
 };

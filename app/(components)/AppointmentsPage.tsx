@@ -1,35 +1,35 @@
+import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
   Alert,
-  RefreshControl,
+  FlatList,
   Image,
+  RefreshControl,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import * as Haptics from "expo-haptics";
-import { useRouter } from "expo-router";
 import TeachAssistAuthFetcher, {
-  SecureStorage,
   AppointmentData,
+  SecureStorage,
 } from "../(auth)/taauth";
-
-interface AppointmentsPageProps {
-  navigation?: any; // If using React Navigation
-}
+import { useTheme } from "../contexts/ThemeContext";
+import BackButton from "./Back";
 
 // view booked appointments
-//* NOTE: not exaustive only since last fresh login, ta's appts tracking are unstable
+//* NOTE: not exaustive only since last fresh login, ta's appts tracking are shit and unstable
 
-const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ navigation }) => {
+const AppointmentsPage = () => {
+  const { isDark } = useTheme();
   const [appointments, setAppointments] = useState<AppointmentData[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelingAppointment, setCancelingAppointment] =
     useState<AppointmentData | null>(null);
 
-  const router = useRouter();
+  const [reasonMapping, setReasonMapping] = useState<Record<string, string>>(
+    {}
+  );
 
   // Load appointments
   const loadAppointments = async () => {
@@ -146,97 +146,115 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ navigation }) => {
 
   // Load appointments on component mount
   useEffect(() => {
+    const loadReasonMapping = async () => {
+      try {
+        const mappingJson = await SecureStorage.load("reason_mapping");
+        if (mappingJson) {
+          console.log(JSON.parse(mappingJson));
+          setReasonMapping(JSON.parse(mappingJson));
+        }
+      } catch (error) {
+        console.error("Error loading reason mapping:", error);
+      }
+    };
+
+    loadReasonMapping();
     loadAppointments();
   }, []);
 
   // Render individual appointment item
   const renderAppointmentItem = ({ item }: { item: AppointmentData }) => (
-    <View className="bg-3 rounded-xl p-4 mb-4">
-      <View className="flex-row justify-between items-center mb-3">
-        <Text className="text-white text-lg font-semibold flex-1">
+    <View
+      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mb-4`}
+    >
+      <View className={`flex-row justify-between items-center mb-2`}>
+        <Text
+          className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold flex-1`}
+        >
           {formatDate(item.date)}
         </Text>
-        <View className="bg-blue-500/20 border border-blue-500/30 px-3 py-1 rounded-lg">
-          <Text className="text-blue-400 font-semibold">
+        <View className={`bg-baccent/70 px-3 py-2 rounded-lg`}>
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} font-normal`}
+          >
             {formatTime(item.time)}
           </Text>
         </View>
       </View>
 
-      <View className="mb-4">
-        {item.teacher && (
-          <Text className="text-gray-300 mb-1">Teacher: {item.teacher}</Text>
-        )}
-        {item.subject && (
-          <Text className="text-gray-300 mb-1">Subject: {item.subject}</Text>
-        )}
+      <View className={`mb-6 mt-2`}>
         {item.reason && (
-          <Text className="text-gray-300 mb-1">Reason: {item.reason}</Text>
+          <Text
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg font-light`}
+          >
+            Appointment for:{" "}
+            <Text className="text-baccent font-bold">
+              {reasonMapping[item.reason] || item.reason}
+            </Text>
+          </Text>
         )}
-        <Text className="text-gray-500 text-sm mt-2">
-          Booked: {new Date(item.bookedAt).toLocaleDateString()}
+        <Text
+          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg font-light`}
+        >
+          Booked:{" "}
+          <Text className="text-baccent font-bold">
+            {new Date(item.bookedAt).toLocaleDateString()}
+          </Text>
         </Text>
       </View>
 
       <TouchableOpacity
-        className={`py-3 px-4 rounded-lg items-center ${loading ? "bg-red-500/30" : "bg-red-500/80"}`}
+        className={`py-3 px-4 rounded-lg items-center bg-danger`}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           handleCancelAppointment(item);
         }}
         disabled={loading}
       >
-        <Text className="text-white font-semibold">Cancel Appointment</Text>
+        <Text className={`text-white font-semibold`}>Cancel Appointment</Text>
       </TouchableOpacity>
     </View>
   );
 
   // Empty state component
   const renderEmptyState = () => (
-    <View className="flex-1 items-center justify-center px-8">
+    <View className={`flex-1 items-center justify-center px-8`}>
       <Image
         source={require("../../assets/images/not_found.png")}
-        className="w-30 h-30 mb-3"
+        className={`w-30 h-30 mb-3`}
         style={{ tintColor: "#27b1fa" }}
       />
-      <Text className="text-white text-xl font-semibold text-center mb-2">
+      <Text
+        className={`${isDark ? "text-light3" : "text-dark3"} text-xl font-semibold text-center mb-2`}
+      >
         No Upcoming Appointments
       </Text>
-      <Text className="text-gray-400 text-center text-lg leading-6">
-        You don&apos;t have any scheduled appointments. Book one through the guidance
-        page!
+      <Text className={`text-gray-400 text-center text-lg leading-6`}>
+        You don&apos;t have any scheduled appointments. Book one through the
+        guidance page!
       </Text>
     </View>
   );
 
   return (
-    <View className="flex-1 bg-2">
-      <TouchableOpacity
-        className="absolute top-15 left-5 flex flex-row items-center gap-2 bg-gray-700/80 rounded-lg px-4 py-2 shadow-lg z-10"
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.replace("/guidance");
-        }}
-      >
-        <Image
-          className="w-8 h-8"
-          style={{ tintColor: "#edebea" }}
-          source={require("../../assets/images/arrow-icon-left.png")}
-        />
-        <Text className="text-white font-semibold text-lg">Back</Text>
-      </TouchableOpacity>
+    <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <BackButton path={"/guidance"} />
 
-      <View className="px-5 mt-23 mb-5 items-center ">
-        <Text className="text-4xl font-semibold text-white mt-8">
+      <View className={`px-5 mt-23 mb-5 items-center `}>
+        <Text
+          className={`text-4xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"} mt-8`}
+        >
           My Appointments
         </Text>
-        <Text className="text-gray-300 text-md mt-1">
-          Manage your scheduled guidance appointments
+        <Text
+          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg mt-1`}
+        >
+          Manage upcoming guidance appointments
         </Text>
       </View>
 
       {/* stuff */}
-      <View className="flex-1 px-5">
+      <View className={`flex-1 px-5`}>
         {appointments.length === 0 && !loading ? (
           renderEmptyState()
         ) : (
@@ -271,6 +289,14 @@ const AppointmentsPage: React.FC<AppointmentsPageProps> = ({ navigation }) => {
           onLoadingChange={setLoading}
         />
       )}
+      <Text
+        className={`absolute bottom-4 text-center mx-8 ${isDark ? "text-appgraydark" : "text-appgraylight"}`}
+        style={{ fontSize: 11 }}
+      >
+        Note: This list is not exaustive! If you booked an appointment off the
+        app or if you signed out recently, it may not show up. It{`'`}s always
+        best to check the TA website to make sure.
+      </Text>
     </View>
   );
 };

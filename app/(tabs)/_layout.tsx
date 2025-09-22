@@ -1,7 +1,7 @@
+import * as Haptics from "expo-haptics";
 import { Tabs } from "expo-router";
 import { Image, View } from "react-native";
-import * as Haptics from "expo-haptics";
-
+import { useTheme } from "../contexts/ThemeContext";
 
 // todo add hollow icon sources
 type TabIconProps = {
@@ -12,12 +12,14 @@ type TabIconProps = {
   focused: boolean;
 };
 
-
 const TabIcon = ({ source, hollowSource, width, focused }: TabIconProps) => {
+  const { isDark } = useTheme();
   if (focused) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     return (
-      <View className="flex-col items-center mt-7 min-w-[112px] scale-120 transition duration-200">
+      <View
+        className={`flex-col items-center mt-7 min-w-[112px] scale-120 transition duration-200`}
+      >
         <Image
           source={source}
           className={width}
@@ -28,11 +30,13 @@ const TabIcon = ({ source, hollowSource, width, focused }: TabIconProps) => {
     );
   } else {
     return (
-      <View className="size-full justify-center items-center mt-7 min-w-[112px]">
+      <View
+        className={`size-full justify-center items-center mt-7 min-w-[112px]`}
+      >
         <Image
           source={hollowSource}
           className={width}
-          tintColor="#5d5d5d"
+          tintColor={isDark ? "#5d5d5d" : "#2e2e33"}
           resizeMode="contain"
         />
       </View>
@@ -41,6 +45,7 @@ const TabIcon = ({ source, hollowSource, width, focused }: TabIconProps) => {
 };
 
 export default function TabLayout() {
+  const { isDark } = useTheme();
   return (
     <Tabs
       screenOptions={{
@@ -51,9 +56,9 @@ export default function TabLayout() {
           justifyContent: "center",
         },
         tabBarStyle: {
-          backgroundColor: "#161616",
+          backgroundColor: `${isDark ? "#111113" : "#fbfbfb"}`,
           overflow: "hidden",
-          borderColor: "#2a2a2a",
+          borderColor: `${isDark ? "#2a2a2a" : "#eeeeee"}`,
           borderTopWidth: 2,
         },
       }}

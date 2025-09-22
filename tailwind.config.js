@@ -1,26 +1,35 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
   content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
+  darkMode: "class",
   presets: [require("nativewind/preset")],
   theme: {
     extend: {
       colors: {
         // backgrounds
-        1: "#161616",
-        2: "#191919",
-        3: "#1e1e1e",
-        4: "#292929",
+        dark1: "#111113",
+        dark2: "#191919",
+        dark3: "#191a1d",
+        dark4: "#232427",
+
+        light1: "#fbfbfb",
+        light2: "#e7e7e9",
+        light3: "#eeeeef",
+        light4: "#dddde0",
 
         // text and stuff
-        appwhite: "#edebea", //ebitda
-        appgray: "#5d5d5d",
-        baccent: "#27b1fa", // beautiful blue
+        appwhite: "#fafafa",
+        appgraylight: "#aaaab1",
+        appgraydark: "#82838b",
+        appblack: "#2f3035",
+        baccent: "#27b1fa", // accent blue
 
         // state colours
-        success: "#28A745",
-        danger: "#ff465f",
-        warning: "#842626",
-        info: "#0087b6",
+        success: "#43a25a",
+        caution: "#fcc245",
+        warning: "#f67c15",
+        danger: "#d6363f",
+        info: "#0272de",
       },
 
       // screw you nativewind

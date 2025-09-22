@@ -263,16 +263,17 @@ function parseGradeInfo(
     course.hasGrade = false;
     return;
   }
-
   // check if no marks yet
   if (text.includes("Please see teacher for current status")) {
     course.grade = "See teacher";
     course.hasGrade = false; // modify change here
     course.subjectId = gradeLink;
   } else if (gradeLink) {
-    // get grade percentage ex "Course Mark: 97.8%"
-    const gradeMatch = text.match(/Course Mark:\s*(\d+\.?\d*%)/);
+
+    // get grade percentage ex "current mark = 97.8%"
+    const gradeMatch = text.match(/current mark =\s*(\d+\.?\d*)%/);
     course.grade = gradeMatch ? gradeMatch[1] : text.trim();
+    console.log("grade" + course.grade);
     course.hasGrade = true;
     course.subjectId = gradeLink;
   } else {
@@ -291,6 +292,8 @@ function parseStudentGrades(htmlString: string): string {
 
   try {
     const result = parseCourseData(htmlString);
+
+    console.log(result);
 
     if (!result.success) {
       console.error("Error parsing course data:", result.error);

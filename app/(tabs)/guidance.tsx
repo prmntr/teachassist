@@ -1,20 +1,24 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Haptics from "expo-haptics";
+import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
   Image,
+  RefreshControl,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
 import TeachAssistAuthFetcher, { AppointmentFormData } from "../(auth)/taauth";
 import AppointmentBooking from "../(components)/AppointmentBooking";
 import AppointmentReasonForm from "../(components)/AppointmentReasonForm";
+import { useTheme } from "../contexts/ThemeContext";
+import NetInfo from "@react-native-community/netinfo";
 
 const Guidance = () => {
+  const { isDark } = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isLoading, setIsLoading] = useState(false);
   const [guidanceResult, setGuidanceResult] = useState<string | null>(null);
@@ -36,7 +40,15 @@ const Guidance = () => {
     }
   };
 
-  const checkGuidanceAvailability = () => {
+  const checkGuidanceAvailability = async () => {
+     const netInfo = await NetInfo.fetch();
+
+     if (!netInfo.isConnected) {
+       setError(
+         "No internet connection. Please check your connection and try again."
+       );
+       return;
+     }
     setError(null);
     setGuidanceResult(null);
     setShowAppointmentForm(false);
@@ -44,7 +56,14 @@ const Guidance = () => {
   };
 
   const handleGuidanceResult = (result: string) => {
-    console.log("Guidance result:", result);
+
+    // Handle re-authentication success - retry the guidance check
+    if (result.includes("REAUTH SUCCESS")) {
+      console.log("Re-authentication successful, retrying guidance check...");
+      // Don't set showFetcher to false, keep it true to retry
+      return;
+    }
+
     setGuidanceResult(result);
     setShowFetcher(false);
   };
@@ -57,6 +76,11 @@ const Guidance = () => {
 
   // Check if the result is an appointment form
   const isAppointmentForm = (html: string): boolean => {
+    console.log(
+      "appointment is " + html.includes('name="reason"') &&
+        html.includes('type="radio"') &&
+        html.includes("Submit Reason")
+    );
     return (
       html.includes('name="reason"') &&
       html.includes('type="radio"') &&
@@ -73,7 +97,13 @@ const Guidance = () => {
   };
 
   const handleBookingResult = (result: string) => {
-    console.log("Booking result:", result);
+
+    // Handle re-authentication success - retry the booking
+    if (result === "REAUTH SUCCESS") {
+      console.log("Re-authentication successful, retrying booking...");
+      // Don't clear bookingUrl, keep the booking request active to retry
+      return;
+    }
 
     // Check if the result is a form that needs to be filled
     if (isAppointmentForm(result)) {
@@ -152,6 +182,13 @@ const Guidance = () => {
   const handleFormSubmissionResult = (result: string) => {
     console.log("Form submission result:", result);
 
+    // Handle re-authentication success - retry the form submission
+    if (result === "REAUTH SUCCESS") {
+      console.log("Re-authentication successful, retrying form submission...");
+      // Don't clear formSubmissionData, keep the form submission request active to retry
+      return;
+    }
+
     if (result.includes("successfully")) {
       Alert.alert(
         "Appointment Successful",
@@ -206,41 +243,60 @@ const Guidance = () => {
 
     if (isLoading && !bookingUrl && !formSubmissionData) {
       return (
-        <ScrollView
-          className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text className="text-appwhite text-center mt-2 text-xl">
-            Checking availability for{" "}
-            {selectedDate.toLocaleDateString("en-GB", {
-              day: "2-digit",
-              month: "2-digit",
-              year: "numeric",
-            })}
-            ...
-          </Text>
-        </ScrollView>
+        <View className="flex-1 shadow-md">
+          <ScrollView
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center pt-5`}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-center mt-2 text-xl`}
+            >
+              Checking availability for{" "}
+              {selectedDate.toLocaleDateString("en-GB", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+              })}
+              ...
+            </Text>
+            <RefreshControl
+              refreshing={true}
+              size={80}
+              tintColor="#27b1fa"
+              colors={["#27b1fa"]}
+            />
+          </ScrollView>
+        </View>
       );
     }
 
     if (bookingResult) {
       return (
-        <ScrollView
-          className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text
-            className={`text-center mt-2 text-lg ${
-              bookingResult.includes("successfully")
-                ? "text-emerald-400"
-                : bookingResult.includes("cancelled")
-                  ? "text-yellow-400"
-                  : "text-red-400"
-            }`}
+        <View className="flex-1 shadow-md">
+          <ScrollView
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center`}
+            showsVerticalScrollIndicator={false}
           >
-            {bookingResult}
-          </Text>
-        </ScrollView>
+            <View className="flex items-center">
+              <Image
+                source={require("../../assets/images/checkmark.png")}
+                className={` w-30 h-30 my-3`}
+                style={{
+                  tintColor: bookingResult.includes("successfully")
+                    ? "#43a25a"
+                    : bookingResult.includes("cancelled")
+                      ? "#fcc245"
+                      : "#d6363f",
+                }}
+              />
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-xl font-semibold`}
+              >
+                {bookingResult}
+              </Text>
+            </View>
+          </ScrollView>
+        </View>
       );
     }
 
@@ -250,80 +306,99 @@ const Guidance = () => {
         : "Booking appointment...";
 
       return (
-        <ScrollView
-          className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text className="text-appwhite text-center mt-2 text-lg">
-            {loadingText}
-          </Text>
-        </ScrollView>
+        <View className="flex-1 shadow-md">
+          <ScrollView
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center`}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-center mt-2 text-lg`}
+            >
+              {loadingText}
+            </Text>
+          </ScrollView>
+        </View>
       );
     }
 
     if (error) {
       return (
-        <ScrollView
-          className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-          showsVerticalScrollIndicator={false}
-        >
-          <View className="flex items-center justify-center">
-            <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-              {selectedDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              })}
-            </Text>
-            <Image
-              source={require("../../assets/images/not_found.png")}
-              className=" w-30 h-30 my-3"
-              style={{ tintColor: "#27b1fa" }}
-            />
-            <Text className="text-red-700 text-center text-xl font-semibold">
-              An error occurred: {error}
-            </Text>
-          </View>
-        </ScrollView>
+        <View className="shadow-md flex-1">
+          <ScrollView
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center`}
+            showsVerticalScrollIndicator={false}
+          >
+            <View className={`flex items-center justify-center`}>
+              <Text
+                className={`text-2xl text-baccent font-semibold mb-3 text-center`}
+              >
+                {selectedDate.toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
+              </Text>
+              <Image
+                source={require("../../assets/images/not_found.png")}
+                className={` w-30 h-30 my-3`}
+                style={{ tintColor: "#d6363f" }}
+              />
+              <Text
+                className={`text-danger text-center text-lg max-w-md`}
+              >
+                An error occurred:{"\n" + error}
+              </Text>
+            </View>
+          </ScrollView>
+        </View>
       );
     }
 
     if (guidanceResult === "NOT A SCHOOL DAY") {
       return (
-        <ScrollView
-          className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-          showsVerticalScrollIndicator={false}
-        >
-          <View className="flex items-center justify-center">
-            <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-              {selectedDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              })}
-            </Text>
-            <Image
-              source={require("../../assets/images/not_found.png")}
-              className=" w-30 h-30 my-3"
-              style={{ tintColor: "#27b1fa" }}
-            />
-            <Text className="text-appwhite text-center text-xl">
-              {selectedDate.toLocaleDateString("en-GB", {
-                day: "2-digit",
-                month: "2-digit",
-                year: "numeric",
-              }) + ` `}
-              is not a school day.{`\n`}Choose another date and try again.
-            </Text>
-          </View>
-        </ScrollView>
+        <View className="shadow-md flex-1">
+          <ScrollView
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center`}
+            showsVerticalScrollIndicator={false}
+          >
+            <View className={`flex items-center justify-center`}>
+              <Text
+                className={`text-2xl text-baccent font-semibold mb-3 text-center`}
+              >
+                {selectedDate.toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                })}
+              </Text>
+              <Image
+                source={require("../../assets/images/not_found.png")}
+                className={` w-30 h-30 my-3`}
+                style={{ tintColor: "#27b1fa" }}
+              />
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-xl`}
+              >
+                {selectedDate.toLocaleDateString("en-GB", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                }) + ` `}
+                is not a school day.{`\n`}Choose another date and try again.
+              </Text>
+            </View>
+          </ScrollView>
+        </View>
       );
     }
 
+    // should never happen again
     if (guidanceResult && guidanceResult.includes("Login Failed")) {
       return (
-        <View className="bg-red-500/15 my-5 px-5 py-3 rounded-lg">
-          <Text className="text-xl text-red-400 text-center font-bold">
+        <View
+          className={`${isDark ? "bg-dark3" : "bg-light3"} my-5 px-5 py-3 rounded-lg`}
+        >
+          <Text className={`text-xl text-danger text-center font-bold`}>
             Session expired. Please log in again.
           </Text>
         </View>
@@ -353,59 +428,82 @@ const Guidance = () => {
     ) {
       // fallback for unexpected format
       return (
-        <ScrollView
-          className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text className="text-md text-appwhite">
-            {guidanceResult.replace(/<[^>]*>/g, "").trim() +"\n\n"}Relaunch the app.
-          </Text>
-        </ScrollView>
+        <View className="flex-1 shadow-md">
+          <ScrollView
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center`}
+            showsVerticalScrollIndicator={false}
+          >
+            <Text
+              className={`text-md ${isDark ? "text-appwhite" : "text-appblack"}`}
+            >
+              {guidanceResult.replace(/<[^>]*>/g, "").trim() + "\n\n"}Relaunch
+              the app.
+            </Text>
+          </ScrollView>
+        </View>
       );
     }
 
     return (
-      <ScrollView
-        className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="flex items-center justify-center mt-5">
-          <Image
-            source={require("../../assets/images/search_icon.png")}
-            className=" w-30 h-30 my-3 items-center"
-            style={{ tintColor: "#27b1fa" }}
-          />
-          <Text className="text-appwhite text-center text-xl font-semibold">
-            Choose a date{"\n"}to show appointments.
-          </Text>
-        </View>
-      </ScrollView>
+      <View className="shadow-md flex-1">
+        <ScrollView
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center shadow-md`}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className={`flex items-center justify-center mt-5`}>
+            <Image
+              source={require("../../assets/images/search_icon.png")}
+              className={` w-30 h-30 my-3 items-center`}
+              style={{ tintColor: "#27b1fa" }}
+            />
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-xl font-semibold`}
+            >
+              Choose a date{"\n"}to show appointments.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
     );
   };
 
   return (
-    <View className="flex-1 bg-2 px-5">
-      <View className="flex-row items-center justify-between mt-18">
-        <Text className="text-5xl font-semibold text-appwhite">Guidance</Text>
-        <TouchableOpacity
-          onPress={() => {
-            router.replace("/AppointmentsPage");
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }}
-          disabled={isLoading}
+    <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"} px-5`}>
+      <View className={`flex-row items-center justify-between mt-18`}>
+        <Text
+          className={`text-5xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"}`}
         >
-          <View className="bg-baccent/80 text-appwhite p-2 text-center rounded-lg font-medium text-lg px-3">
-            <Image
-              source={require("../../assets/images/upcoming-calendar-icon.png")}
-              className="w-7 h-8"
-              style={{ tintColor: "#edebea" }}
-            />
-          </View>
-        </TouchableOpacity>
+          Guidance
+        </Text>
+        <View className="shadow-md">
+          <TouchableOpacity
+            onPress={() => {
+              router.replace("/AppointmentsPage");
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            }}
+            disabled={isLoading}
+          >
+            <View
+              className={`${isDark ? "bg-baccent/95 text-appwhite" : "bg-baccent text-appblack"} p-2 text-center rounded-lg font-medium text-lg px-3 `}
+            >
+              <Image
+                source={require("../../assets/images/upcoming-calendar-icon.png")}
+                className={`w-7 h-8`}
+                style={{
+                  tintColor: isDark ? "#111113" : "#fbfbfb",
+                }}
+              />
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
-      <View className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full text-appwhite text-center mt-4">
-        <View className="items-center">
-          <Text className="text-appwhite text-xl mb-2">
+      <View
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full ${isDark ? "text-appwhite" : "text-appblack"} text-center mt-4`}
+      >
+        <View className={`items-center`}>
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl mb-2`}
+          >
             Selected Date:{" "}
             {selectedDate.toLocaleDateString("en-GB", {
               day: "2-digit",
@@ -423,16 +521,18 @@ const Guidance = () => {
             />
           )}
         </View>
-        <View className="flex-row justify-between">
+        <View className={`flex-row justify-between`}>
           <TouchableOpacity
             onPress={() => {
               setShowDatePicker(true);
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }}
             disabled={isLoading}
-            className="flex-1 mr-2"
+            className={`flex-1 mr-2`}
           >
-            <Text className="bg-4 text-appwhite mt-3 p-2 pb-3 text-center rounded-lg text-lg">
+            <Text
+              className={`${isDark ? "text-appwhite bg-dark4" : "text-appblack bg-light4"} mt-3 p-2 pb-3 text-center rounded-lg text-lg`}
+            >
               Choose a Date
             </Text>
           </TouchableOpacity>
@@ -443,11 +543,13 @@ const Guidance = () => {
             }}
             disabled={isLoading}
           >
-            <View className="bg-baccent/80  text-appwhite mt-3 p-2 text-center rounded-lg font-medium text-lg px-3">
+            <View
+              className={`${isDark ? "bg-baccent/95" : "bg-baccent"} mt-3 p-2 text-center rounded-lg font-medium text-lg px-3`}
+            >
               <Image
                 source={require("../../assets/images/calendar-icon.png")}
-                className="w-6 h-8"
-                style={{ tintColor: "#edebea" }}
+                className={`w-6 h-8`}
+                style={{ tintColor: isDark ? "#111113" : "#fbfbfb" }}
               />
             </View>
           </TouchableOpacity>

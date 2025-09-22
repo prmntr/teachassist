@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useTheme } from "../contexts/ThemeContext";
 
 interface Appointment {
   counselorName: string;
@@ -26,12 +27,62 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
   html,
   onAppointmentPress,
 }) => {
+  const { isDark } = useTheme();
+
+  // i'm not proud
+  if (
+    html
+      .toLocaleLowerCase()
+      .includes("have reports that are available for viewing")
+  ) {
+    return (
+      <View className="flex-1 shadow-md">
+        <ScrollView
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full`}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className={`flex items-center justify-center`}>
+            <Text
+              className={`text-2xl text-baccent font-semibold mb-3 text-center`}
+            >
+              Appointment Update
+            </Text>
+            <Image
+              source={require("../../assets/images/refresh.png")}
+              className={`w-20 h-20 my-3`}
+              style={{ tintColor: "#27b1fa" }}
+            />
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-lg`}
+            >
+              TeachAssist has refreshed the appointment list. Choose a date to
+              see the changes!
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
   // get date from html
   const extractDate = (htmlContent: string): string => {
     const dateMatch = htmlContent.match(
       /Appointment Bookings on (\d{4}-\d{2}-\d{2})/
     );
-    return dateMatch ? dateMatch[1] : "Unknown Date";
+
+    if (!dateMatch) return "Unknown Date";
+
+    const dateString = dateMatch[1];
+
+    // Parse the date components manually to avoid timezone issues
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date = new Date(year, month - 1, day); // month is 0-indexed
+
+    // Format it consistently with your selected date format
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   };
 
   const parseAppointments = (htmlContent: string): Appointment[] => {
@@ -124,104 +175,127 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
   // Handle special cases
   if (html.includes("NOT A SCHOOL DAY")) {
     return (
-      <ScrollView
-        className="bg-3 rounded-xl p-6 mb-4 shadow-lg w-full"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="flex items-center justify-center mt-10">
-          <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-            {date}
-          </Text>
-          <Image
-            source={require("../../assets/images/not_found.png")}
-            className="w-30 h-30 my-3"
-            style={{ tintColor: "#27b1fa" }}
-          />
-          <Text className="text-appwhite text-center text-lg">
-            {date} is not a school day.{"\n"}Choose another date and try again.
-          </Text>
-        </View>
-      </ScrollView>
+      <View className="flex-1 shadow-md">
+        <ScrollView
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-4 shadow-lg w-full`}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className={`flex items-center justify-center mt-10`}>
+            <Text
+              className={`text-2xl text-baccent font-semibold mb-3 text-center`}
+            >
+              {date}
+            </Text>
+            <Image
+              source={require("../../assets/images/not_found.png")}
+              className={`w-30 h-30 my-3`}
+              style={{ tintColor: "#27b1fa" }}
+            />
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-lg`}
+            >
+              {date} is not a school day.{"\n"}Choose another date and try
+              again.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
   if (appointments.length === 0) {
     return (
-      <ScrollView
-        className="bg-3 rounded-xl p-6 mb-6 shadow-lg w-full"
-        showsVerticalScrollIndicator={false}
-      >
-        <View className="flex items-center justify-center">
-          <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-            {date}
-          </Text>
-          <Image
-            source={require("../../assets/images/not_found.png")}
-            className="w-30 h-30 my-3"
-            style={{ tintColor: "#27b1fa" }}
-          />
-          <Text className="text-appwhite text-center text-lg">
-            No appointments are currently available for {date}.{"\n"}Choose
-            another date and try again.
-          </Text>
-        </View>
-      </ScrollView>
+      <View className="flex-1 shadow-md">
+        <ScrollView
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-lg w-full`}
+          showsVerticalScrollIndicator={false}
+        >
+          <View className={`flex items-center justify-center`}>
+            <Text
+              className={`text-2xl text-baccent font-semibold mb-3 text-center`}
+            >
+              {date}
+            </Text>
+            <Image
+              source={require("../../assets/images/not_found.png")}
+              className={`w-30 h-30 my-3`}
+              style={{ tintColor: "#27b1fa" }}
+            />
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-lg`}
+            >
+              No appointments are currently available for {date}.{"\n"}Choose
+              another date and try again.
+            </Text>
+          </View>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      className="bg-3 rounded-xl p-6 mb-4 shadow-lg w-full"
-    >
-      <View className="mb-5">
-        <Text className="text-2xl text-baccent font-semibold mb-3 text-center">
-          {date}
-        </Text>
-        <Text className="text-emerald-400 text-2xl font-semibold mb-1 text-center">
-          {appointments.length} slot{appointments.length !== 1 ? "s" : ""}{" "}
-          {appointments.length !== 1 ? "available." : "left!"}
-        </Text>
-        <Text className="text-appwhite/70 text-center">
-          Choose a time slot to book an appointment.
-        </Text>
-      </View>
-
-      {/* may break but probably not this site sucks */}
-      {Object.keys(groupedAppointments).some((name) => name.includes("(")) && (
-        <View className="mb-4">
-          <Text className="bg-emerald-500/20 border-emerald-500/30 border text-emerald-400/80 p-2 px-3 text-center rounded-lg font-medium">
-            Your school has last name based counselors! Remember to choose the
-            counselor corresponding to your last name.
+    <View className="flex-1 shadow-md">
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-4 shadow-lg w-full`}
+      >
+        <View className={`mb-5`}>
+          <Text
+            className={`text-2xl text-baccent font-semibold mb-3 text-center`}
+          >
+            {date}
+          </Text>
+          <Text
+            className={`text-success text-2xl font-semibold mb-1 text-center`}
+          >
+            {appointments.length} slot{appointments.length !== 1 ? "s" : ""}{" "}
+            {appointments.length !== 1 ? "available." : "left!"}
+          </Text>
+          <Text
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center`}
+          >
+            Choose a time slot to book an appointment.
           </Text>
         </View>
-      )}
 
-      {/* Render appts grouped by counselor */}
-      {Object.entries(groupedAppointments).map(
-        ([counselorName, counselorAppointments]) => (
-          <View key={counselorName} className="mb-6">
-            <Text className="text-baccent text-lg font-semibold mb-3 text-center">
-              {counselorName}
-            </Text>
-            <View className="flex-row flex-wrap justify-center gap-3">
-              {counselorAppointments.map((appointment) => (
-                <TouchableOpacity
-                  key={appointment.id}
-                  onPress={() => handleAppointmentPress(appointment)}
-                  className="bg-4 px-4 py-3 rounded-lg flex-1"
-                  style={{ minWidth: 100, maxWidth: "45%" }}
-                >
-                  <Text className="text-appwhite font-medium text-center">
-                    {formatTime(appointment.time)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+        {/* may break but probably not this site sucks */}
+        {Object.keys(groupedAppointments).some(
+          (name) => name.includes("(") || name.includes("-")
+        ) && (
+          <View className={``}>
           </View>
-        )
-      )}
-    </ScrollView>
+        )}
+
+        {/* Render appts grouped by counselor */}
+        {Object.entries(groupedAppointments).map(
+          ([counselorName, counselorAppointments]) => (
+            <View key={counselorName} className={`mb-6`}>
+              <Text
+                className={`text-baccent text-lg font-semibold mb-3 text-center`}
+              >
+                {counselorName}
+              </Text>
+              <View className={`flex-row flex-wrap justify-center gap-3`}>
+                {counselorAppointments.map((appointment) => (
+                  <TouchableOpacity
+                    key={appointment.id}
+                    onPress={() => handleAppointmentPress(appointment)}
+                    className={`${isDark ? "bg-dark4" : "bg-light4"} px-4 py-3 rounded-lg flex-1`}
+                    style={{ minWidth: 100, maxWidth: "45%" }}
+                  >
+                    <Text
+                      className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium text-center`}
+                    >
+                      {formatTime(appointment.time)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )
+        )}
+      </ScrollView>
+    </View>
   );
 };
 

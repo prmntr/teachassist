@@ -12,7 +12,7 @@ function Messages() {
   const getUserName = async () => {
     let userName = await SecureStorage.load("ta_username");
     if (userName !== null && userName.includes("349300863")) {
-      setUserName("Josh Zhou"); // don't question it
+      setUserName("Josh Zhou"); // you should question it josh
     } else {
       setUserName(userName);
     }
@@ -27,19 +27,10 @@ function Messages() {
     "How's it going, ",
     "Greetings, ",
     "Good to see you, ",
-    "Welcome back, "
+    "Welcome back, ",
   ];
 
-  const postMessage = [
-    "!",
-    "!",
-    "!",
-    "?",
-    "?",
-    ".",
-    ".",
-    "",
-  ];
+  const postMessage = ["!", "!", "!", "?", "?", ".", ".", ""];
 
   useEffect(() => {
     getUserName();
@@ -59,7 +50,7 @@ function Messages() {
   return (
     <Text>
       {message1}
-      <Text className="text-baccent font-semibold">{userName}</Text>
+      <Text className={`text-baccent font-semibold`}>{userName}</Text>
       {message2}
     </Text>
   );
