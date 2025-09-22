@@ -19,7 +19,7 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.1.0",
+  version = "1.1.1",
   updates = [
     {
       type: "new",
