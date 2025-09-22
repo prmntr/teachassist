@@ -268,7 +268,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
 
   return (
     <View
-      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 w-full flex-row items-center justify-between flex-wrap`}
+      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mt-1 flex-row items-center justify-center`}
     >
       <View className={`flex-column items-center justify-center mr-5`}>
         <AnimatedProgressWheel

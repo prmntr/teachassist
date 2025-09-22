@@ -259,9 +259,9 @@ const Guidance = () => {
               })}
               ...
             </Text>
+            {/* refesh anim effectively disabled until i want to*/}
             <RefreshControl
               refreshing={true}
-              size={80}
               tintColor="#27b1fa"
               colors={["#27b1fa"]}
             />
