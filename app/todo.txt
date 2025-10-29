@@ -15,3 +15,5 @@ clean up comments and code remove redundant stuff (never happening)
 
 i'm prob not adding ios support, 99 dollas is EXPENSIVE
 
+- anal is sometimes broken
+

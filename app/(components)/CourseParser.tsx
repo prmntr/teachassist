@@ -1,5 +1,8 @@
 import { Parser } from "htmlparser2";
 
+
+// parses the individual courses from HOMEPAGE NOT ASSIGNMENTS FOR SPECIFIC COURSES
+
 // types for return
 interface Course {
   courseCode: string;

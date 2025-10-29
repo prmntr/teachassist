@@ -1,5 +1,7 @@
+import { findAll, textContent, getOuterHTML } from "domutils";
 import { parseDocument } from "htmlparser2";
-import { findAll, textContent } from "domutils";
+
+// parses out the assignments for a specific course
 
 // single parsed assignment
 interface Assignment {
@@ -12,9 +14,20 @@ interface Assignment {
       weight: string;
     } | null;
   };
+  feedback?: string;
 }
 
-// Structure for the final summary
+// Course weightings for each category
+interface CourseWeightings {
+  knowledge: string;
+  thinking: string;
+  communication: string;
+  application: string;
+  other: string;
+  final: string;
+}
+
+// brief summary
 interface Summary {
   term: number | null;
   course: number | null;
@@ -23,6 +36,7 @@ interface Summary {
     weighting: string;
     achievement: string;
   }[];
+  courseWeightings: CourseWeightings;
 }
 
 // Complete parsed course data
@@ -71,9 +85,11 @@ const categoryMap: { [key: string]: { key: string; name: string } } = {
   ffd490: { key: "A", name: "Application" },
   "#dedede": { key: "O", name: "Other/Culminating" },
   dedede: { key: "O", name: "Other/Culminating" },
+  eeeeee: { key: "O", name: "Other/Culminating" },
+  cccccc: { key: "F", name: "Final/Culminating" },
 };
 
-// Extract course name from HTML - improved to handle the structure better
+// Extract course name from HTML
 const extractCourseName = (dom: any): string => {
   // First try to find h2 elements
   const h2Elements = findAll((el) => el.tagName === "h2", dom);
@@ -108,9 +124,163 @@ const isFormativeAssignment = (
   });
 };
 
+const extractFeedback = (assignmentCell: any): string => {
+  const assignmentName = safeGetText(assignmentCell).trim();
+
+  // 1. Find the parent table and get its raw HTML
+  let currentElement = assignmentCell.parent;
+  let depth = 0;
+  while (currentElement && currentElement.tagName !== "table" && depth < 10) {
+    currentElement = currentElement.parent;
+    depth++;
+  }
+  const assignmentTable = currentElement;
+
+  if (!assignmentTable || assignmentTable.tagName !== "table") {
+    return "";
+  }
+
+  // Use getOuterHTML to get the raw string of the assignment block
+  // This is the source of truth, bypassing the broken DOM node traversal
+  const tableHtml = getOuterHTML(assignmentTable);
+
+  // 2. String search for the feedback cell attributes relative to the assignment name
+  const assignmentStart = tableHtml.indexOf(assignmentName);
+  if (assignmentStart === -1) return "";
+
+  // The feedback cell is known to be:
+  // <td colspan="4" bgcolor="white"> (with potential whitespace)
+  const feedbackPattern =
+    /<td\s+colspan\s*=\s*"4"\s+bgcolor\s*=\s*"white"\s*>(.*?)<\/td>/is;
+
+  // Search only in the HTML *after* the assignment name (where the feedback row is)
+  const postAssignmentHtml = tableHtml.substring(assignmentStart);
+
+  const match = postAssignmentHtml.match(feedbackPattern);
+
+  if (match && match[1]) {
+    let rawFeedbackText = match[1].trim();
+
+    // 3. Clean up the extracted HTML content (match[1] is the content inside the <td>)
+    const cleanedFeedback = rawFeedbackText
+      // Remove all remaining HTML tags (like <br> or <font>)
+      .replace(/<[^>]*>/gi, " ")
+      // Remove the "Feedback:" prefix
+      .replace(/^Feedback:\s*/i, "")
+      .replace(/&#xa0;/, "")
+      // Normalize whitespace
+      .replace(/\s+/g, " ")
+      .trim();
+
+    // 4. Final log and return
+    if (cleanedFeedback.length > 5) {
+      console.log(
+        cleanedFeedback.substring(0, 50) + "..."
+      );
+      return cleanedFeedback;
+    } else {
+      console.warn(
+        "probably no feedback, " + 
+        cleanedFeedback
+      );
+    }
+  } else {
+    console.warn(
+      "could not find any feedback for assignment"
+    );
+  }
+
+  return "";
+};
+
+// Parse course weightings from the weighting table
+const parseCourseWeightings = (dom: any): CourseWeightings => {
+  const defaultWeightings: CourseWeightings = {
+    knowledge: "0%",
+    thinking: "0%",
+    communication: "0%",
+    application: "0%",
+    other: "0%",
+    final: "0%",
+  };
+
+  // Find all tables in the DOM
+  const tables = findAll((el) => el.tagName === "table", dom);
+
+  // Look for the table that contains category weightings
+  let weightingTable = null;
+  for (const table of tables) {
+    const tableText = safeGetText(table);
+    if (
+      tableText.includes("Category") &&
+      tableText.includes("Weighting") &&
+      tableText.includes("Student Achievement")
+    ) {
+      weightingTable = table;
+      break;
+    }
+  }
+
+  if (!weightingTable) {
+    console.warn("Could not find weighting table");
+    return defaultWeightings;
+  }
+
+  // Find all rows in the weighting table
+  const rows = findAll((el) => el.tagName === "tr", weightingTable);
+
+  for (const row of rows) {
+    const cells = findAll((el) => el.tagName === "td", row);
+    if (cells.length === 0) continue; // Skip header row
+
+    const categoryName = safeGetText(cells[0]).toLowerCase();
+
+    // Extract percentages from the row
+    const rowText = safeGetText(row);
+    const percentages = rowText.match(/(\d+%)/g) || [];
+
+    let courseWeighting = "";
+
+    // Apply the logic: if 3 percentages, take 2nd; if 2 percentages, take 1st
+    if (percentages.length >= 3) {
+      courseWeighting = percentages[1]; // 2nd percentage (Course Weighting column)
+    } else if (percentages.length === 2) {
+      courseWeighting = percentages[0]; // 1st percentage (for Final/Culminating)
+    }
+
+    // Map category names to our structure
+    if (
+      categoryName.includes("knowledge") ||
+      categoryName.includes("understanding")
+    ) {
+      defaultWeightings.knowledge = courseWeighting;
+    } else if (categoryName.includes("thinking")) {
+      defaultWeightings.thinking = courseWeighting;
+    } else if (categoryName.includes("communication")) {
+      defaultWeightings.communication = courseWeighting;
+    } else if (categoryName.includes("application")) {
+      defaultWeightings.application = courseWeighting;
+    } else if (
+      categoryName.includes("other") &&
+      !categoryName.includes("final") &&
+      !categoryName.includes("culminating")
+    ) {
+      defaultWeightings.other = courseWeighting;
+    } else if (
+      categoryName.includes("final") ||
+      categoryName.includes("culminating")
+    ) {
+      defaultWeightings.final = courseWeighting;
+    }
+  }
+
+  console.log("Parsed course weightings:", defaultWeightings);
+  return defaultWeightings;
+};
 
 // Parse assignments from HTML
 const parseAssignments = (dom: any): Assignment[] => {
+  console.log(dom);
   const assignments: Assignment[] = [];
 
   // Find all TD elements with rowspan="2", these are assignment name cells
@@ -133,6 +303,12 @@ const parseAssignments = (dom: any): Assignment[] => {
         O: null,
       },
     };
+
+    // Extract feedback for this assignment
+    const feedback = extractFeedback(assignmentCell);
+    if (feedback) {
+      assignment.feedback = feedback;
+    }
 
     // Find the parent row of this assignment cell
     const parentRow = assignmentCell.parent;
@@ -173,6 +349,31 @@ const parseAssignments = (dom: any): Assignment[] => {
   }
 
   return assignments.reverse(); // Recent first
+};
+
+export const hasFeedback = (assignment: Assignment): boolean => {
+  return !!(assignment.feedback && assignment.feedback.length > 0);
+};
+
+export const getFeedbackPreview = (
+  feedback: string,
+  maxLength: number = 100
+): string => {
+  if (!feedback) return "";
+  if (feedback.length <= maxLength) return feedback;
+  return feedback.substring(0, maxLength).trim() + "...";
+};
+
+export const formatFeedback = (feedback: string): string => {
+  if (!feedback) return "";
+
+  // Split by common sentence endings and rejoin with proper spacing
+  return feedback
+    .replace(/\.\s+/g, ". ")
+    .replace(/\?\s+/g, "? ")
+    .replace(/!\s+/g, "! ")
+    .replace(/,\s+/g, ", ")
+    .trim();
 };
 
 // Parse summary data from HTML - improved error handling
@@ -248,10 +449,14 @@ const parseSummary = (dom: any): Summary => {
     return isNaN(parsed) ? null : parsed;
   };
 
+  // Parse course weightings
+  const courseWeightings = parseCourseWeightings(dom);
+
   return {
     term: parsePercentage(termText),
     course: parsePercentage(courseText),
     categories: categoryBreakdown,
+    courseWeightings: courseWeightings,
   };
 };
 
@@ -260,7 +465,19 @@ export const parseGradeData = (htmlContent: string): ParsedCourseData => {
   if (!htmlContent) {
     return {
       assignments: [],
-      summary: { term: null, course: null, categories: [] },
+      summary: {
+        term: null,
+        course: null,
+        categories: [],
+        courseWeightings: {
+          knowledge: "0%",
+          thinking: "0%",
+          communication: "0%",
+          application: "0%",
+          other: "0%",
+          final: "0%",
+        },
+      },
       courseName: "Course",
       success: false,
       error: "No HTML content provided",
@@ -283,7 +500,19 @@ export const parseGradeData = (htmlContent: string): ParsedCourseData => {
   } catch (error) {
     return {
       assignments: [],
-      summary: { term: null, course: null, categories: [] },
+      summary: {
+        term: null,
+        course: null,
+        categories: [],
+        courseWeightings: {
+          knowledge: "0%",
+          thinking: "0%",
+          communication: "0%",
+          application: "0%",
+          other: "0%",
+          final: "0%",
+        },
+      },
       courseName: "Course",
       success: false,
       error: error instanceof Error ? error.message : "Unknown parsing error",
@@ -331,6 +560,7 @@ export const getProgressColor = (percentage: number): string => {
 };
 
 export const getPerformanceText = (percentage: number): string => {
+  if (percentage >= 100) return "Perfect Performance";
   if (percentage >= 90) return "Excellent Performance";
   if (percentage >= 80) return "Strong Performance";
   if (percentage >= 70) return "Good Performance";

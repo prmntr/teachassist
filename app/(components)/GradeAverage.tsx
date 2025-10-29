@@ -5,6 +5,9 @@ import { SecureStorage } from "../(auth)/taauth";
 import { useTheme } from "../contexts/ThemeContext";
 import { Course } from "./CourseParser";
 
+// gets grade average
+// TODO: connect w/ notifs
+
 interface GradeStats {
   currentAverage: number;
   previousAverage: number | null;
@@ -87,7 +90,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           <Image
             source={require("../../assets/images/caret-arrow-down.png")}
             className={`w-4 h-4 object-fill`}
-            style={{ tintColor: "#ff6467" }}
+            style={{ tintColor: "#d6363f" }}
           />
         );
       case "same":
@@ -271,25 +274,32 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
       className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mt-1 flex-row items-center justify-center`}
     >
       <View className={`flex-column items-center justify-center mr-5`}>
-        <AnimatedProgressWheel
-          size={125}
-          width={13}
-          color={"#27b1fa"}
-          backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-          progress={gradeStats.currentAverage}
-          max={100}
-          rounded={true}
-          rotation={"-90deg"}
-          delay={75}
-          duration={400}
-          showProgressLabel={true}
-          labelStyle={{
-            color: "#27b1fa",
-            fontSize: 24,
-            fontWeight: "600",
-          }}
-          showPercentageSymbol={true}
-        />
+        <View className="items-center justify-center">
+          <AnimatedProgressWheel
+            size={125}
+            width={13}
+            color={gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f"}
+            backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+            progress={gradeStats.currentAverage}
+            max={100}
+            rounded={true}
+            rotation={"-90deg"}
+            delay={75}
+            duration={400}
+            showPercentageSymbol={true}
+          />
+          <View className="absolute">
+            <Text
+              style={{
+                color: gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f",
+                fontSize: 24,
+                fontWeight: "600",
+              }}
+            >
+              {gradeStats.currentAverage.toFixed(1)}%{/* TA only has up to 1 */}
+            </Text>
+          </View>
+        </View>
       </View>
       <View className={`flex-column justify-start items-start`}>
         <Text

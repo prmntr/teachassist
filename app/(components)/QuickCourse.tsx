@@ -102,7 +102,8 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
       }
       return "No Grade Available Yet";
     }
-
+    if(numericMark === 0) return "No Mark Available Yet"; // all formatives
+    if (numericMark >= 100) return "Perfect Performance";
     if (numericMark >= 90) return "Excellent Performance";
     if (numericMark >= 80) return "Strong Performance";
     if (numericMark >= 70) return "Good Performance";
@@ -118,7 +119,7 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
         <View className={`flex-row items-center justify-start mb-1`}>
           <View className={`w-2 h-2 bg-baccent rounded-full mr-2`} />
           <Text
-            className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-light`}
+            className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-normal`}
           >
             {getPerformanceStatus(displayCourse.courseMark)}
           </Text>
@@ -153,28 +154,38 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
         <View>
           {(() => {
             const mark = parseFloat(displayCourse.courseMark);
-            // sorry about the progress
-            return (
-              <AnimatedProgressWheel
-                size={90}
-                width={13}
-                color={mark >= 50 ? "#2faf7f" : "#d6363f"}
-                backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                progress={mark === 999 ? NaN : mark}
-                max={100}
-                rounded={true}
-                rotation={"-90deg"}
-                duration={400}
-                delay={75}
-                showProgressLabel={true}
-                labelStyle={{
-                  color: "#2faf7f",
-                  fontSize: 16,
-                  fontWeight: "600",
-                }}
-                showPercentageSymbol={true}
-              />
-            );
+            console.log(mark)
+            return !isNaN(mark) ? (
+              <View className="items-center justify-center">
+                <AnimatedProgressWheel
+                  size={90}
+                  width={10}
+                  color={mark >= 50 ? "#2faf7f" : "#d6363f"}
+                  backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                  progress={mark === 999 ? NaN : mark}
+                  max={100}
+                  rounded={true}
+                  rotation={"-90deg"}
+                  duration={400}
+                  delay={75}
+                  // label is bad
+                  showProgressLabel={false}
+                />
+
+                <View className="absolute">
+                  <Text
+                    style={{
+                      color: mark >= 50 ? "#2faf7f" : "#d6363f",
+                      fontSize: 17,
+                      fontWeight: "600",
+                    }}
+                  >
+                    {mark.toFixed(1)}%
+                    {/* TA only has up to 1 */}
+                  </Text>
+                </View>
+              </View>
+            ) : null;
           })()}
         </View>
       </View>

@@ -1,6 +1,6 @@
 import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
   ImageBackground,
+  Linking
   // FlatList,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
@@ -256,7 +257,7 @@ const CoursesScreen = () => {
       )}
       {isLoading && (
         <>
-          <ActivityIndicator size="large" color="#ffffff" className={`mt-5`} />
+          <ActivityIndicator size="large" color="#27b1fa" />
           {message.includes("re-authenticate") && (
             <TeachAssistAuthFetcher
               fetchWithCookies
@@ -289,7 +290,7 @@ const CoursesScreen = () => {
           {/* sem 1 Courses */}
           {semester1Courses.length > 0 && (
             <View>
-              <View className={`mt-2`}>
+              <View className={`mt-8`}>
                 <Text
                   className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-medium`}
                 >
@@ -358,7 +359,7 @@ const CoursesScreen = () => {
           {/* sem 2 Courses */}
           {semester2Courses.length > 0 && (
             <>
-              <View className={`mt-6`}>
+              <View className={`mt-4`}>
                 <Text
                   className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-medium`}
                 >
@@ -423,16 +424,14 @@ const CoursesScreen = () => {
               ))}
             </>
           )}
-          <Link
-            href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+          <TouchableOpacity
             className={`mb-10 mt-3 p-3`}
+            onPress={() =>
+              Linking.openURL("market://details?id=com.prmntr.teachassist")
+            }
           >
-            <Text
-              className={`text-appgraydark text-center text-md`}
-            >
-              click me for a prize
-            </Text>
-          </Link>
+            <Text className={`text-appgraydark text-center text-md underline`}>leave a review for +10% luck on ur next test :D</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
 

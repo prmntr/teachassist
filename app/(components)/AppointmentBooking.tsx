@@ -239,14 +239,14 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
         showsVerticalScrollIndicator={false}
         className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-4 shadow-lg w-full`}
       >
-        <View className={`mb-5`}>
+        <View className={`mb-5 ${isDark ? "bg-dark4" : "bg-light4"} p-3 py-5 rounded-lg`}>
           <Text
             className={`text-2xl text-baccent font-semibold mb-3 text-center`}
           >
             {date}
           </Text>
           <Text
-            className={`text-success text-2xl font-semibold mb-1 text-center`}
+            className={`text-emerald-500 text-2xl font-semibold mb-1 text-center`}
           >
             {appointments.length} slot{appointments.length !== 1 ? "s" : ""}{" "}
             {appointments.length !== 1 ? "available." : "left!"}
@@ -261,10 +261,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
         {/* may break but probably not this site sucks */}
         {Object.keys(groupedAppointments).some(
           (name) => name.includes("(") || name.includes("-")
-        ) && (
-          <View className={``}>
-          </View>
-        )}
+        ) && <View className={``}></View>}
 
         {/* Render appts grouped by counselor */}
         {Object.entries(groupedAppointments).map(

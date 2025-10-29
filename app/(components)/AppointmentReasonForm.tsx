@@ -217,8 +217,7 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
                       ? "bg-success"
                       : `${isDark ? "bg-appgraydark" : "bg-appgraylight"}`
                   }`}
-                >
-                </View>
+                ></View>
                 <Text
                   className={`${
                     withParent
@@ -257,7 +256,12 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
 
           <View className={`flex-row gap-3`}>
             <TouchableOpacity
-              onPress={onCancel}
+              onPress={() => {
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                );
+                onCancel();
+              }}
               className={`flex-1 bg-danger px-4 py-3 rounded-lg`}
             >
               <Text className={`text-appwhite font-medium text-center text-lg`}>
@@ -266,7 +270,12 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
             </TouchableOpacity>
 
             <TouchableOpacity
-              onPress={handleSubmit}
+              onPress={() => {
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                );
+                handleSubmit();
+              }}
               className={`flex-1 px-4 py-3 rounded-lg ${
                 selectedReason
                   ? "bg-success"

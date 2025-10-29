@@ -11,11 +11,7 @@ function Messages() {
 
   const getUserName = async () => {
     let userName = await SecureStorage.load("ta_username");
-    if (userName !== null && userName.includes("349300863")) {
-      setUserName("Josh Zhou"); // you should question it josh
-    } else {
-      setUserName(userName);
-    }
+    setUserName(userName);
     return userName;
   };
 
@@ -30,7 +26,7 @@ function Messages() {
     "Welcome back, ",
   ];
 
-  const postMessage = ["!", "!", "!", "?", "?", ".", ".", ""];
+  const postMessage = ["!", "!", "!", "?", "?", ".", ".", "."];
 
   useEffect(() => {
     getUserName();

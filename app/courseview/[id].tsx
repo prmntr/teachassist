@@ -16,7 +16,6 @@ import AnimatedProgressWheel from "react-native-progress-wheel";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
 import BackButton from "../(components)/Back";
 import {
-  calculateOverallMark,
   getCategoryFullName,
   getPerformanceText,
   getProgressColor,
@@ -56,13 +55,45 @@ const CourseViewScreen = () => {
     return userName;
   };
 
-  // calc course average including added ones
+  const calculateWeightedMark = (categories: any): number => {
+    let totalWeightedScore = 0;
+    let totalWeight = 0;
+
+    Object.values(categories).forEach((value: any) => {
+      if (value && value.weight && value.percentage) {
+        const percentage = parseFloat(value.percentage.replace("%", ""));
+        const weight = parseFloat(value.weight);
+        // Only include categories that have a weight greater than 0
+        if (!isNaN(percentage) && !isNaN(weight) && weight > 0) {
+          totalWeightedScore += percentage * weight;
+          totalWeight += weight;
+        }
+      }
+    });
+
+    // If totalWeight is 0 (e.g., formative assignment or no weighted categories),
+    // calculate a simple average of the percentages present.
+    if (totalWeight === 0) {
+      const percentages = Object.values(categories)
+        .filter((cat: any) => cat && cat.percentage)
+        .map((cat: any) => parseFloat(cat.percentage.replace("%", "")));
+
+      if (percentages.length === 0) return 0;
+
+      const sum = percentages.reduce((a, b) => a + b, 0);
+      return Math.round(sum / percentages.length);
+    }
+
+    return Math.round(totalWeightedScore / totalWeight);
+  };
+
+  // calc course average including added ones with weighted calculation
   const calculateCourseAverage = () => {
-    if (!courseData?.assignments || courseData.assignments.length === 0) {
+    if (!courseData?.assignments || !courseData.summary?.courseWeightings) {
       return courseData?.summary?.course || 0;
     }
 
-    // filter formative assignments for course average calculation
+    const weightings = courseData.summary.courseWeightings;
     const gradedAssignments = courseData.assignments.filter(
       (assignment) => !assignment.formative
     );
@@ -71,12 +102,67 @@ const CourseViewScreen = () => {
       return courseData?.summary?.course || 0;
     }
 
-    const total = gradedAssignments.reduce((sum, assignment) => {
-      const mark = calculateOverallMark(assignment.categories);
-      return sum + (mark || 0);
-    }, 0);
+    // Step 1: Calculate the weighted achievement for each category across all assignments
+    const categoryTotals: Record<
+      string,
+      { totalWeightedScore: number; totalWeight: number }
+    > = {
+      K: { totalWeightedScore: 0, totalWeight: 0 },
+      T: { totalWeightedScore: 0, totalWeight: 0 },
+      C: { totalWeightedScore: 0, totalWeight: 0 },
+      A: { totalWeightedScore: 0, totalWeight: 0 },
+      O: { totalWeightedScore: 0, totalWeight: 0 },
+    };
 
-    return Math.round(total / gradedAssignments.length);
+    gradedAssignments.forEach((assignment) => {
+      Object.entries(assignment.categories).forEach(([key, value]) => {
+        if (value && value.weight) {
+          const percentage = parseFloat(value.percentage.replace("%", ""));
+          const weight = parseFloat(value.weight);
+          if (!isNaN(percentage) && !isNaN(weight) && weight > 0) {
+            categoryTotals[key].totalWeightedScore += percentage * weight;
+            categoryTotals[key].totalWeight += weight;
+          }
+        }
+      });
+    });
+
+    const categoryAchievements: Record<string, number> = {};
+    Object.keys(categoryTotals).forEach((key) => {
+      if (categoryTotals[key].totalWeight > 0) {
+        categoryAchievements[key] =
+          categoryTotals[key].totalWeightedScore /
+          categoryTotals[key].totalWeight;
+      }
+    });
+
+    // Step 2 & 3: Apply course weightings to calculate the final mark
+    const courseWeightMap = {
+      K: parseFloat(weightings.knowledge.replace("%", "")) || 0,
+      T: parseFloat(weightings.thinking.replace("%", "")) || 0,
+      C: parseFloat(weightings.communication.replace("%", "")) || 0,
+      A: parseFloat(weightings.application.replace("%", "")) || 0,
+      O: parseFloat(weightings.other.replace("%", "")) || 0,
+    };
+
+    let totalWeightedAchievement = 0;
+    let totalAssessedWeight = 0;
+
+    Object.entries(categoryAchievements).forEach(([key, achievement]) => {
+      const courseWeight = courseWeightMap[key as keyof typeof courseWeightMap];
+      if (courseWeight > 0) {
+        totalWeightedAchievement += achievement * courseWeight;
+        totalAssessedWeight += courseWeight;
+      }
+    });
+
+    if (totalAssessedWeight === 0) {
+      return courseData?.summary?.course || 0; // Fallback if no assessed categories have weight
+    }
+
+    const finalMark = totalWeightedAchievement / totalAssessedWeight;
+    // Using toFixed(1) and parseFloat to get closer to the 90.5 example
+    return parseFloat(finalMark.toFixed(1));
   };
 
   const toggleAssignmentExpansion = (index: number) => {
@@ -100,7 +186,7 @@ const CourseViewScreen = () => {
 
     setCourseData({
       ...courseData,
-      assignments: [...courseData.assignments, newAssignment],
+      assignments: [newAssignment, ...courseData.assignments],
     });
 
     setShowAssignmentModal(false);
@@ -176,7 +262,9 @@ const CourseViewScreen = () => {
       setIsLoading(false);
 
       if (parsedData.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setMessage(`Freshly Retrieved ${new Date().toLocaleTimeString()}`);
+
         // cache html
         if (subjectID) {
           SecureStorage.save(`course_${subjectID}`, result);
@@ -283,7 +371,6 @@ const CourseViewScreen = () => {
     });
 
     const handleSave = () => {
-
       let finalCategories: any = {};
 
       (Object.entries(categories) as [CategoryKey, CategoryState][]).forEach(
@@ -322,6 +409,7 @@ const CourseViewScreen = () => {
       });
     };
 
+    
     return (
       <Modal visible={visible} transparent animationType="slide">
         <View className="flex-1 bg-black/50 items-center justify-center px-4">
@@ -433,7 +521,7 @@ const CourseViewScreen = () => {
                             Grade (%)
                           </Text>
                           <TextInput
-                            className={`${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded p-2 text-sm`}
+                            className={`${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded p-2 text-md`}
                             value={value.percentage}
                             onChangeText={(text) => {
                               const num = parseInt(text);
@@ -469,7 +557,7 @@ const CourseViewScreen = () => {
                             Weight
                           </Text>
                           <TextInput
-                            className={`${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded p-2 text-sm`}
+                            className={`${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded p-2 text-md`}
                             value={value.weight}
                             onChangeText={(text) => {
                               const num = parseInt(text);
@@ -543,7 +631,7 @@ const CourseViewScreen = () => {
         setCourseData({
           assignments: [
             {
-              name: "Final Exam",
+              name: "Mid Semester Quest",
               categories: {
                 K: null,
                 T: null,
@@ -555,23 +643,24 @@ const CourseViewScreen = () => {
                   weight: "20",
                 },
               },
+              feedback: "feedback",
             },
             {
-              name: "Bad Research Report",
+              name: "Research Report: What Was The Dog Doing?",
               categories: {
                 K: null,
                 T: null,
                 C: null,
                 A: null,
                 O: {
-                  score: "40 / 65",
-                  percentage: "61%",
+                  score: "64.5 / 65",
+                  percentage: "99%",
                   weight: "10",
                 },
               },
             },
             {
-              name: "Test with good mark",
+              name: "Unit 3: Addition and Subtraction",
               categories: {
                 K: {
                   score: "7 / 8",
@@ -597,16 +686,27 @@ const CourseViewScreen = () => {
               },
             },
             {
-              name: "Test with bad mark",
+              name: "Research Conference",
               categories: {
                 K: {
-                  score: "2 / 10",
-                  percentage: "20%",
+                  score: "8 / 8",
+                  percentage: "100%",
+                  weight: "10",
+                },
+              },
+              formative: true,
+            },
+            {
+              name: "Unit 2 Test: Torque",
+              categories: {
+                K: {
+                  score: "8 / 10",
+                  percentage: "80%",
                   weight: "10",
                 },
                 T: {
-                  score: "5 / 10",
-                  percentage: "50%",
+                  score: "7 / 10",
+                  percentage: "70%",
                   weight: "10",
                 },
                 C: {
@@ -615,19 +715,20 @@ const CourseViewScreen = () => {
                   weight: "10",
                 },
                 A: {
-                  score: "6 / 10",
-                  percentage: "60%",
+                  score: "2 / 10",
+                  percentage: "20%",
                   weight: "10",
                 },
                 O: null,
               },
+              feedback: `perchance`,
             },
             {
-              name: "Generic test",
+              name: "Unit 1 Test: Introduction to Advanced Topology",
               categories: {
                 K: {
-                  score: "12 / 13",
-                  percentage: "92%",
+                  score: "13 / 13",
+                  percentage: "100%",
                   weight: "10",
                 },
                 T: {
@@ -650,7 +751,7 @@ const CourseViewScreen = () => {
             },
           ],
           summary: {
-            term: 92,
+            term: 90,
             course: 93,
             categories: [
               {
@@ -684,12 +785,20 @@ const CourseViewScreen = () => {
                 achievement: "",
               },
             ],
+            courseWeightings: {
+              knowledge: "35%",
+              thinking: "15%",
+              communication: "15%",
+              application: "35%",
+              other: "0%",
+              final: "30%",
+            },
           },
-          courseName: "Example Course",
+          courseName: "Intro to Mathematics",
           success: true,
         });
         setIsLoading(false);
-        setMessage("Test course data loaded");
+        setMessage("Last updated just now");
         return;
       }
 
@@ -790,7 +899,6 @@ const CourseViewScreen = () => {
     <View className={`w-full`}>
       {courseData?.assignments.map((assignment, index) => {
         const isExpanded = expandedAssignments.has(index);
-
         return (
           <TouchableOpacity
             key={index}
@@ -803,13 +911,29 @@ const CourseViewScreen = () => {
           >
             <View className={`flex-row justify-between items-center`}>
               <View className={`flex-1`}>
-                {assignment.formative && (
-                  <Text
-                    className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
-                  >
-                    Formative
-                  </Text>
-                )}
+                <View className="flex-row">
+                  {assignment.formative && (
+                    <Text
+                      className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
+                    >
+                      Formative
+                    </Text>
+                  )}
+                  {assignment.formative && assignment.feedback && (
+                    <Text
+                      className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
+                    >
+                      {` • `}
+                    </Text>
+                  )}
+                  {assignment.feedback && (
+                    <Text
+                      className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
+                    >
+                      Teacher Feedback
+                    </Text>
+                  )}
+                </View>
                 <Text
                   className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-1`}
                 >
@@ -819,41 +943,48 @@ const CourseViewScreen = () => {
                   className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm font-light`}
                 >
                   {getPerformanceText(
-                    calculateOverallMark(assignment.categories)
+                    calculateWeightedMark(assignment.categories)
                   )}
                 </Text>
               </View>
 
               <View className={`flex-row items-center`}>
-                <View className={`mr-3`}>
+                
+                <View className={`mr-3 items-center justify-center`}>
                   <AnimatedProgressWheel
                     size={70}
                     width={6}
                     color={
-                      calculateOverallMark(assignment.categories) >= 50
+                      calculateWeightedMark(assignment.categories) >= 50
                         ? "#2faf7f"
                         : "#d6363f"
                     }
                     backgroundColor={isDark ? "#232427" : "#e7e7e9"}
                     progress={
-                      calculateOverallMark(assignment.categories) ?? NaN
+                      calculateWeightedMark(assignment.categories) ?? NaN
                     }
                     max={100}
                     rounded={true}
                     rotation={"-90deg"}
                     delay={75}
                     duration={400}
-                    showProgressLabel={true}
-                    labelStyle={{
-                      color:
-                        calculateOverallMark(assignment.categories) >= 50
-                          ? "#2faf7f"
-                          : "#d6363f",
-                      fontSize: 15,
-                      fontWeight: "600",
-                    }}
                     showPercentageSymbol={true}
                   />
+                  <View className="absolute">
+                    <Text
+                      style={{
+                        color:
+                          calculateWeightedMark(assignment.categories) >= 50
+                            ? "#2faf7f"
+                            : "#d6363f",
+                        fontSize: 14,
+                        fontWeight: "600",
+                      }}
+                    >
+                      {calculateWeightedMark(assignment.categories).toFixed(1)}%
+                      {/* TA only has up to 1 */}
+                    </Text>
+                  </View>
                 </View>
 
                 {/* button to make big/small */}
@@ -925,6 +1056,22 @@ const CourseViewScreen = () => {
                         </View>
                       </View>
                     ) : null
+                  )}
+                  {assignment.feedback !== undefined && (
+                    <View
+                      className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-4 mt-1`}
+                    >
+                      <Text
+                        className={`${isDark ? "text-baccent/95" : "text-baccent"} text-lg font-medium`}
+                      >
+                        Teacher Feedback
+                      </Text>
+                      <Text
+                        className={`${isDark ? "text-appwhite/70" : "text-appblack/70"} font-light`}
+                      >
+                        {assignment.feedback}
+                      </Text>
+                    </View>
                   )}
                 </View>
                 <View
@@ -1015,14 +1162,13 @@ const CourseViewScreen = () => {
     const gradedAssignments =
       courseData?.assignments.filter((assignment) => !assignment.formative) ||
       [];
-    if (
-      !courseData?.assignments ||
-      courseData.assignments.length === 0 ||
-      gradedAssignments.length === 0
-    ) {
-      // i cant add shadows to this wtffffff
+
+    // reverse orders bc TA
+    const chronologicalAssignments = [...gradedAssignments].reverse();
+
+    if (chronologicalAssignments.length === 0) {
       return (
-        <View className="">
+        <View>
           <View
             className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 text-center items-center flex-1 pb-10`}
           >
@@ -1041,99 +1187,140 @@ const CourseViewScreen = () => {
         </View>
       );
     }
-    const hasLearningCategories = gradedAssignments.some(
-      (assignment) =>
-        assignment.categories.K ||
-        assignment.categories.T ||
-        assignment.categories.C ||
-        assignment.categories.A
-    );
 
-    if (!hasLearningCategories) {
-      // wtffffff
-      return (
-        <View className="">
-          <View
-            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 text-center items-center flex-1 pb-10`}
-          >
-            <Image
-              source={require("../../assets/images/not_found.png")}
-              className={`w-30 h-30 my-3`}
-              style={{ tintColor: "#27b1fa" }}
-            />
-            <Text
-              className={`${isDark ? "text-appgraylight" : "text-appgrayblack"} text-center text-md`}
-            >
-              No learning categories found in assignments.{`\n`}Analytics work
-              best with at least 1 category.
-            </Text>
-          </View>
-        </View>
-      );
-    }
+    // function to get the average based on a subset of assignments
+    const calculateProgressiveCourseAverage = (
+      assignments: any[],
+      weightings: any
+    ) => {
+      if (assignments.length === 0) return 0;
 
-    const getCategoryLineData = (categoryKey: string) => {
-      const categoryAssignments = gradedAssignments
-        .map((assignment, index) => ({
-          assignment,
-          index,
-          category: assignment.categories[categoryKey],
-        }))
-        .filter((item) => item.category !== null);
-
-      return categoryAssignments.map((item, arrayIndex) => {
-        // get avg for this category up to this point
-        const assignmentsUpToHere = categoryAssignments.slice(
-          0,
-          arrayIndex + 1
+      const categoryTotals: Record<
+        string,
+        { totalWeightedScore: number; totalWeight: number }
+      > = {
+        K: { totalWeightedScore: 0, totalWeight: 0 },
+        T: { totalWeightedScore: 0, totalWeight: 0 },
+        C: { totalWeightedScore: 0, totalWeight: 0 },
+        A: { totalWeightedScore: 0, totalWeight: 0 },
+        O: { totalWeightedScore: 0, totalWeight: 0 },
+      };
+      assignments.forEach((assignment) => {
+        Object.entries(assignment.categories).forEach(
+          ([key, value]: [string, any]) => {
+            if (value && value.weight) {
+              const percentage = parseFloat(value.percentage.replace("%", ""));
+              const weight = parseFloat(value.weight);
+              if (!isNaN(percentage) && !isNaN(weight) && weight > 0) {
+                categoryTotals[key].totalWeightedScore += percentage * weight;
+                categoryTotals[key].totalWeight += weight;
+              }
+            }
+          }
         );
-        const cumulativeAverage = Math.round(
-          assignmentsUpToHere.reduce((sum, a) => {
-            const percentage = a.category
-              ? parseInt(a.category.percentage.replace("%", ""))
-              : 0;
-            return sum + percentage;
-          }, 0) / assignmentsUpToHere.length
-        );
-
-        return {
-          value: cumulativeAverage,
-          label: (arrayIndex + 1).toString(),
-          labelTextStyle: { color: "#edebea", fontSize: 10 },
-        };
       });
+
+      const categoryAchievements: Record<string, number> = {};
+      Object.keys(categoryTotals).forEach((key) => {
+        if (categoryTotals[key].totalWeight > 0) {
+          categoryAchievements[key] =
+            categoryTotals[key].totalWeightedScore /
+            categoryTotals[key].totalWeight;
+        }
+      });
+
+      const courseWeightMap = {
+        K: parseFloat(weightings.knowledge.replace("%", "")) || 0,
+        T: parseFloat(weightings.thinking.replace("%", "")) || 0,
+        C: parseFloat(weightings.communication.replace("%", "")) || 0,
+        A: parseFloat(weightings.application.replace("%", "")) || 0,
+        O: parseFloat(weightings.other.replace("%", "")) || 0,
+      };
+      let totalWeightedAchievement = 0;
+      let totalAssessedWeight = 0;
+      Object.entries(categoryAchievements).forEach(([key, achievement]) => {
+        const courseWeight =
+          courseWeightMap[key as keyof typeof courseWeightMap];
+        if (courseWeight > 0) {
+          totalWeightedAchievement += achievement * courseWeight;
+          totalAssessedWeight += courseWeight;
+        }
+      });
+      if (totalAssessedWeight === 0) return 0;
+      return totalWeightedAchievement / totalAssessedWeight;
     };
 
-    const assignmentData = gradedAssignments.map((assignment, index) => ({
-      value: calculateOverallMark(assignment.categories) || 0,
-      label: `${index + 1}`,
-      frontColor: "#27b1fa",
-      gradientColor: "#2faf7f",
-      topLabelComponent: () => (
-        <Text style={{ color: "#edebea", fontSize: 10, marginBottom: 2 }}>
-          {calculateOverallMark(assignment.categories) || 0}%
-        </Text>
-      ),
-    }));
-
-    // cumulative
-    const overallLineData = gradedAssignments.map((assignment, index) => {
-      // Calculate cumulative average up to this point
-      const assignmentsUpToHere = gradedAssignments.slice(0, index + 1);
-      const cumulativeAverage = Math.round(
-        assignmentsUpToHere.reduce(
-          (sum, a) => sum + (calculateOverallMark(a.categories) || 0),
-          0
-        ) / assignmentsUpToHere.length
+    // calc progressive data for overall course line chart
+    const overallLineData = chronologicalAssignments.map((_, index) => {
+      const assignmentsUpToThisPoint = chronologicalAssignments.slice(
+        0,
+        index + 1
       );
-
+      const cumulativeAverage = calculateProgressiveCourseAverage(
+        assignmentsUpToThisPoint,
+        courseData?.summary.courseWeightings
+      );
       return {
         value: cumulativeAverage,
         label: (index + 1).toString(),
-        labelTextStyle: { color: "#edebea", fontSize: 10 },
+        labelTextStyle: { color: isDark ? "#edebea" : "#2f3035", fontSize: 10 },
       };
     });
-    console.log(overallLineData);
+
+    // Calculate progressive data for category-specific line charts
+    const getCategoryLineData = (categoryKey: CategoryKey) => {
+      const dataPoints: {
+        value: number;
+        label: string;
+        labelTextStyle: { color: string; fontSize: number };
+      }[] = [];
+      // temp structure to track cumulative weighted scores and weights over time
+      const progressiveTotals = { totalWeightedScore: 0, totalWeight: 0 };
+
+      chronologicalAssignments.forEach((assignment, index) => {
+        const categoryData = assignment.categories[categoryKey];
+        if (
+          categoryData &&
+          categoryData.weight &&
+          parseFloat(categoryData.weight) > 0
+        ) {
+          const percentage = parseFloat(
+            categoryData.percentage.replace("%", "")
+          );
+          const weight = parseFloat(categoryData.weight);
+          if (!isNaN(percentage) && !isNaN(weight)) {
+            progressiveTotals.totalWeightedScore += percentage * weight;
+            progressiveTotals.totalWeight += weight;
+          }
+        }
+
+        // only add a data point if this category has been done at least once
+        if (progressiveTotals.totalWeight > 0) {
+          const cumulativeAverage =
+            progressiveTotals.totalWeightedScore /
+            progressiveTotals.totalWeight;
+          dataPoints.push({
+            value: cumulativeAverage,
+            label: (index + 1).toString(),
+            labelTextStyle: {
+              color: isDark ? "#edebea" : "#2f3035",
+              fontSize: 10,
+            },
+          });
+        }
+      });
+      return dataPoints;
+    };
+
+    // Data for the assignment overview bar chart, in correct oder now
+    const assignmentData = chronologicalAssignments.map(
+      (assignment, index) => ({
+        value: calculateWeightedMark(assignment.categories) || 0,
+        label: `${index + 1}`,
+        frontColor: "#27b1fa",
+        gradientColor: "#2faf7f",
+      })
+    );
 
     const categories = [
       { key: "K", name: "Knowledge/Understanding", color: "#27b1fa" },
@@ -1144,18 +1331,25 @@ const CourseViewScreen = () => {
 
     return (
       <View className={`w-full`}>
+        {/* Grade Progression Chart */}
         <View
           className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mb-6 shadow-md`}
         >
-          <Text
-            className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-4`}
-          >
-            Grade Progression
-          </Text>
-          <ScrollView showsHorizontalScrollIndicator={false}>
-            <View className={`flex-1 pb-3`}>
+          <View className="flex-row justify-between items-center mb-4">
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+            >
+              Grade Progression
+            </Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View className={`flex-1 pb-3 pr-4`}>
               <LineChart
                 data={overallLineData}
+                isAnimated
+                focusEnabled
+                showStripOnFocus
+                showTextOnFocus
                 height={180}
                 color="#27b1fa"
                 thickness={3}
@@ -1188,91 +1382,68 @@ const CourseViewScreen = () => {
           </ScrollView>
         </View>
 
+        {/* learning cats */}
         <Text
           className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-1`}
         >
           Learning Categories
         </Text>
-        <View className="flex shadow-md">
-          {!categories ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className={`mb-6`}
-            >
-              <View
-                className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mr-4 pb-7`}
-                style={{ width: 280 }}
-              >
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-bold mb-3`}
-                >
-                  No categories available
-                </Text>
-              </View>
-            </ScrollView>
-          ) : (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              className={`mb-6`}
-            >
-              <View className={`flex-row`}>
-                {categories.map((category) => {
-                  const categoryData = getCategoryLineData(category.key);
-                  if (categoryData.length === 0) return null;
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          className={`mb-6`}
+        >
+          <View className={`flex-row`}>
+            {categories.map((category) => {
+              const categoryData = getCategoryLineData(
+                category.key as CategoryKey
+              );
+              if (categoryData.length === 0) return null;
 
-                  return (
-                    <View
-                      key={category.key}
-                      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mr-4 pb-7`}
-                      style={{ width: 280 }}
-                    >
-                      <Text
-                        className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-bold mb-3`}
-                      >
-                        {category.name}
-                      </Text>
-                      <LineChart
-                        data={categoryData}
-                        width={240}
-                        height={150}
-                        spacing={categoryData.length > 4 ? 35 : 45}
-                        initialSpacing={15}
-                        endSpacing={15}
-                        color={category.color}
-                        thickness={3}
-                        curved
-                        dataPointsColor={category.color}
-                        dataPointsRadius={4}
-                        hideDataPoints={false}
-                        disableScroll={true}
-                        onlyPositive={true}
-                        textColor="#edebea"
-                        textFontSize={10}
-                        xAxisColor="#4a5568"
-                        yAxisColor="#4a5568"
-                        yAxisTextStyle={{
-                          color: `${isDark ? "#edebea" : "#2f3035"}`,
-                          fontSize: 11,
-                        }}
-                        xAxisLabelsHeight={0}
-                        rulesColor="#4a5568"
-                        yAxisLabelSuffix="%"
-                        maxValue={100}
-                        noOfSections={4}
-                        hideRules={true}
-                        xAxisThickness={0}
-                        yAxisThickness={0}
-                        formatYLabel={(value) => `${Math.round(Number(value))}`}
-                      />
-                    </View>
-                  );
-                })}
-              </View>
-            </ScrollView>
-          )}
-        </View>
+              return (
+                <View
+                  key={category.key}
+                  className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mr-4 pb-7`}
+                  style={{ width: 280 }}
+                >
+                  <Text
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-bold mb-3`}
+                  >
+                    {category.name}
+                  </Text>
+                  <LineChart
+                    data={categoryData}
+                    isAnimated
+                    width={240}
+                    height={150}
+                    spacing={categoryData.length > 4 ? 45 : 55}
+                    initialSpacing={15}
+                    endSpacing={15}
+                    color={category.color}
+                    thickness={3}
+                    curved
+                    dataPointsColor={category.color}
+                    dataPointsRadius={4}
+                    yAxisTextStyle={{
+                      color: `${isDark ? "#edebea" : "#2f3035"}`,
+                      fontSize: 11,
+                    }}
+                    xAxisLabelsHeight={0}
+                    yAxisLabelSuffix="%"
+                    maxValue={100}
+                    noOfSections={4}
+                    hideRules
+                    xAxisThickness={0}
+                    yAxisThickness={0}
+                    formatYLabel={(value) => `${Math.round(Number(value))}`}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        </ScrollView>
+
+        {/* assignment overview here */}
         <View
           className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 pb-1 mb-6 shadow-md`}
         >
@@ -1285,7 +1456,8 @@ const CourseViewScreen = () => {
             <View className={`mr-4 flex items-center justify-center`}>
               <BarChart
                 data={assignmentData}
-                height={180}
+                isAnimated
+                height={230}
                 barWidth={30}
                 spacing={12}
                 roundedTop
@@ -1300,15 +1472,18 @@ const CourseViewScreen = () => {
                   fontSize: 11,
                 }}
                 topLabelTextStyle={{
-                  color: `${isDark ? "#edebea" : "#2f3035"}`,
+                  color: `${isDark ? "#2f3035" : "#edebea"}`,
                   fontSize: 13,
+                  fontWeight: "700",
                 }}
                 showValuesAsTopLabel
+                topLabelContainerStyle={{
+                  marginTop: 20,
+                }}
                 xAxisLabelTextStyle={{ color: "transparent" }}
                 noOfSections={4}
                 maxValue={100}
                 yAxisLabelSuffix="%"
-                isAnimated
                 animationDuration={1000}
                 initialSpacing={15}
                 endSpacing={15}
@@ -1317,80 +1492,150 @@ const CourseViewScreen = () => {
             </View>
           </ScrollView>
         </View>
+
+        {/* random stuff */}
         <View
-          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 shadow-md`}
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 shadow-md mb-6`}
         >
           <Text
             className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-4`}
           >
             Performance Summary
           </Text>
-
           <View className={`flex-row justify-between mb-3`}>
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
             >
-              Highest Score:
+              Highest Score
             </Text>
             <Text className={`text-success font-bold`}>
               {Math.max(
-                ...gradedAssignments.map(
-                  (a) => calculateOverallMark(a.categories) || 0
+                ...chronologicalAssignments.map(
+                  (a) => calculateWeightedMark(a.categories) || 0
                 )
               )}
               %
             </Text>
           </View>
-
           <View className={`flex-row justify-between mb-3`}>
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
             >
-              Lowest Score:
+              Lowest Score
             </Text>
             <Text className={`text-danger font-bold`}>
               {Math.min(
-                ...gradedAssignments.map(
-                  (a) => calculateOverallMark(a.categories) || 0
+                ...chronologicalAssignments.map(
+                  (a) => calculateWeightedMark(a.categories) || 0
                 )
               )}
               %
             </Text>
           </View>
-
           <View className={`flex-row justify-between mb-3`}>
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
             >
-              Average:
+              Average Score
             </Text>
             <Text className={`text-baccent font-bold`}>
               {Math.round(
-                gradedAssignments.reduce(
-                  (sum, a) => sum + (calculateOverallMark(a.categories) || 0),
+                chronologicalAssignments.reduce(
+                  (sum, a) => sum + (calculateWeightedMark(a.categories) || 0),
                   0
-                ) / gradedAssignments.length
+                ) / chronologicalAssignments.length
               )}
               %
             </Text>
           </View>
-
           <View className={`flex-row justify-between`}>
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
             >
-              Total Assignments:
+              Total Assignments
             </Text>
             <Text
               className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold`}
             >
-              {courseData.assignments.length}
+              {courseData?.assignments.length ?? 0}
             </Text>
           </View>
         </View>
+        <View
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 shadow-md mb-2`}
+        >
+          {/* course weightings */}
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-4`}
+          >
+            Course Weightings
+          </Text>
+
+          <View className={`flex-row justify-between mb-3`}>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
+            >
+              Knowledge/Understanding
+            </Text>
+            <Text className={`text-baccent font-bold`}>
+              {courseData?.summary?.courseWeightings?.knowledge ?? ""}
+            </Text>
+          </View>
+
+          <View className={`flex-row justify-between mb-3`}>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
+            >
+              Thinking
+            </Text>
+            <Text className={`text-success font-bold`}>
+              {courseData?.summary?.courseWeightings?.thinking ?? ""}
+            </Text>
+          </View>
+
+          <View className={`flex-row justify-between mb-3`}>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
+            >
+              Communication
+            </Text>
+            <Text className={`text-caution font-bold`}>
+              {courseData?.summary?.courseWeightings?.communication ?? ""}
+            </Text>
+          </View>
+
+          <View className={`flex-row justify-between mb-3`}>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
+            >
+              Application
+            </Text>
+            <Text className={`text-danger font-bold`}>
+              {courseData?.summary?.courseWeightings?.application ?? ""}
+            </Text>
+          </View>
+          <View className={`flex-row justify-between`}>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"}`}
+            >
+              Other/Culminating
+            </Text>
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold`}
+            >
+              {courseData?.summary?.courseWeightings?.final ?? ""}
+            </Text>
+          </View>
+        </View>
+        <Text
+          className={`${isDark ? "text-appgraydark" : "text-appgraylight"} text-center mt-3 text-xs`}
+        >
+          Analytics are based on summative assignments only.{`\n`}The cake is a lie!
+        </Text>
       </View>
     );
   };
+  const courseAverage = calculateCourseAverage();
 
   return (
     <View className={`${isDark ? "bg-dark1" : "bg-light1"} flex-1`}>
@@ -1453,29 +1698,39 @@ const CourseViewScreen = () => {
                 >
                   {courseData.summary.term && (
                     <View className={`items-center`}>
-                      <AnimatedProgressWheel
-                        size={115}
-                        width={13}
-                        color={"#27b1fa"}
-                        backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                        progress={
-                          courseData.summary.term === 999
-                            ? NaN
-                            : courseData.summary.term
-                        }
-                        max={100}
-                        rounded={true}
-                        rotation={"-90deg"}
-                        delay={75}
-                        duration={400}
-                        showProgressLabel={true}
-                        labelStyle={{
-                          color: "#27b1fa",
-                          fontSize: 20,
-                          fontWeight: "600",
-                        }}
-                        showPercentageSymbol={true}
-                      />
+                      <View className="items-center justify-center relative">
+                        <AnimatedProgressWheel
+                          size={115}
+                          width={13}
+                          color={"#27b1fa"}
+                          backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                          progress={
+                            courseData.summary.term === 999
+                              ? NaN
+                              : courseData.summary.term
+                          }
+                          max={100}
+                          rounded={true}
+                          rotation={"-90deg"}
+                          delay={75}
+                          duration={400}
+                          showPercentageSymbol={true}
+                        />
+                        <View className="absolute inset-0 items-center justify-center">
+                          <Text
+                            style={{
+                              color:
+                                courseData.summary.term >= 50
+                                  ? "#27b1fa"
+                                  : "#d6363f",
+                              fontSize: 21,
+                              fontWeight: "600",
+                            }}
+                          >
+                            {courseData.summary.term.toFixed(1)}%
+                          </Text>
+                        </View>
+                      </View>
                       <Text
                         className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold mt-2`}
                       >
@@ -1483,26 +1738,34 @@ const CourseViewScreen = () => {
                       </Text>
                     </View>
                   )}
-                  <View className={`items-center`}>
-                    <AnimatedProgressWheel
-                      size={115}
-                      width={13}
-                      color={"#2faf7f"}
-                      backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                      progress={calculateCourseAverage()}
-                      max={100}
-                      rounded={true}
-                      rotation={"-90deg"}
-                      delay={75}
-                      duration={400}
-                      showProgressLabel={true}
-                      labelStyle={{
-                        color: "#2faf7f",
-                        fontSize: 20,
-                        fontWeight: "600",
-                      }}
-                      showPercentageSymbol={true}
-                    />
+                  <View className={``}>
+                    <View className="items-center justify-center">
+                      <AnimatedProgressWheel
+                        size={115}
+                        width={12}
+                        color={"#2faf7f"}
+                        backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                        progress={courseAverage}
+                        max={100}
+                        rounded={true}
+                        rotation={"-90deg"}
+                        delay={75}
+                        duration={400}
+                        showPercentageSymbol={true}
+                      />
+                      <View className="absolute">
+                        {/* Add this wrapper with absolute positioning */}
+                        <Text
+                          style={{
+                            color: courseAverage >= 50 ? "#2faf7f" : "#d6363f",
+                            fontSize: 21,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {courseAverage.toFixed(1)}%
+                        </Text>
+                      </View>
+                    </View>
                     <Text
                       className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold mt-2`}
                     >

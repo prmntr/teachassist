@@ -22,7 +22,7 @@ const ProfileScreen = () => {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const appVersion = "v1.1.1"; //* update w/ app.json
+  const appVersion = "v1.1.3"; //* update w/ app.json
 
   const { theme, toggleTheme, isDark } = useTheme();
 
@@ -220,41 +220,27 @@ const ProfileScreen = () => {
             <Text
               className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg text-center`}
             >
-              {school}
+              {school ?? "Unknown School"}
             </Text>
-            {school?.toLocaleLowerCase().includes("bayview") ? (
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success
-                  );
+            <TouchableOpacity
+              onPress={() => {
+                Haptics.notificationAsync(
+                  Haptics.NotificationFeedbackType.Success
+                );
+                // ive only seen interior maps for bayview
+                if (school?.toLocaleLowerCase().includes("bayview")) {
                   Linking.openURL("https://www.bayviewstuco.ca/map");
-                }}
+                } else {
+                  Alert.alert("Your school does not currently have a school map. Make a support ticket if you have one!")
+                }
+              }}
+            >
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} p-1 px-2 mt-2 bg-baccent/50 rounded-lg text-sm text-center`}
               >
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} p-1 px-2 mt-2 bg-baccent/50 rounded-lg text-sm text-center`}
-                >
-                  School Map
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success
-                  );
-                  Linking.openURL(
-                    "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-                  );
-                }}
-              >
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} p-1 px-2 mt-2 bg-baccent/50 rounded-lg text-sm text-center`}
-                >
-                  School Map
-                </Text>
-              </TouchableOpacity>
-            )}
+                School Map
+              </Text>
+            </TouchableOpacity>
           </View>
         </ImageBackground>
 
@@ -543,20 +529,36 @@ const ProfileScreen = () => {
               >
                 {appVersion}
               </Text>
-              <TouchableOpacity
-                onPress={() => {
-                  Haptics.notificationAsync(
-                    Haptics.NotificationFeedbackType.Success
-                  );
-                  Linking.openURL("https://prmntr.com");
-                }}
-              >
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"}/40 text-sm text-center mt-1`}
+              <View className="flex-row">
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.notificationAsync(
+                      Haptics.NotificationFeedbackType.Success
+                    );
+                    Linking.openURL("https://prmntr.com/teachassist");
+                  }}
                 >
-                  🧑‍💻➡️🥺
-                </Text>
-              </TouchableOpacity>
+                  <Image
+                    source={require("../../assets/images/link.png")}
+                    className={`w-6 h-6 my-1 mr-3`}
+                    style={{ tintColor: "#27b1fa" }}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => {
+                    Haptics.notificationAsync(
+                      Haptics.NotificationFeedbackType.Success
+                    );
+                    Linking.openURL("https://www.instagram.com/teach.assist/");
+                  }}
+                >
+                  <Image
+                    source={require("../../assets/images/instagram.png")}
+                    className={`w-6 h-6 my-1`}
+                    style={{ tintColor: "#27b1fa" }}
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>

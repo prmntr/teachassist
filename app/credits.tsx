@@ -62,7 +62,7 @@ const Guidance = () => {
           <Text>Tick icons created by Pixel perfect - Flaticon</Text>
         </Link>
         <Link
-          href="https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+          href="https://streamable.com/lf027o"
           className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 underline`}
         >
           <Text>You, for using the app 💖</Text>

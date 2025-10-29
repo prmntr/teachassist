@@ -431,7 +431,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     "courseCode": "ENG4U1-7",
     "courseName": "English",
     "block": "1",
-    "room": "123",
+    "room": "41",
     "startDate": "2025-09-02",
     "semester": 1,
     "endDate": "2026-01-29",
@@ -439,8 +439,8 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     "hasGrade": true
   },
   {
-    "courseCode": "MHF4U1-5",
-    "courseName": "Advanced Functions",
+    "courseCode": "MHF3U1-5",
+    "courseName": "Functions",
     "block": "2",
     "room": "67",
     "startDate": "2025-09-02",
@@ -450,26 +450,26 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     "hasGrade": true
   },
   {
+    "courseCode": "FRNCH-1",
+    "courseName": "French As A Second language",
+    "block": "4",
+    "room": "41",
+    "startDate": "2025-09-02",
+    "semester": 1,
+    "endDate": "2026-01-29",
+    "grade": "84",
+    "hasGrade": true
+  },
+  {
     "courseCode": "LUNCH-3",
-    "courseName": "Lunch with Kai Cenat",
+    "courseName": "Lunch",
     "block": "3",
-    "room": "THICK",
+    "room": "CAF",
     "startDate": "2025-09-02",
     "semester": 1,
     "endDate": "2026-01-29",
     "grade": "See teacher",
     "hasGrade": false
-  },
-  {
-    "courseCode": "FRNCH-1",
-    "courseName": "French As A Second language",
-    "block": "4",
-    "room": "ÃƒÆ'Ã†'Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ'Ã†'Ãƒâ€šÃ‚Â¢ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬",
-    "startDate": "2025-09-02",
-    "semester": 1,
-    "endDate": "2026-01-29",
-    "grade": "77",
-    "hasGrade": true
   },
   {
     "courseCode": "SCH4U1-1",

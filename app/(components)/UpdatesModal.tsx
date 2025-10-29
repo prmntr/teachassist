@@ -1,6 +1,7 @@
 import * as Haptics from "expo-haptics";
 import React from "react";
 import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { Link } from "expo-router";
 import { useTheme } from "../contexts/ThemeContext";
 
 interface UpdateItem {
@@ -19,29 +20,29 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.1.1",
+  version = "1.1.3",
   updates = [
-    {
-      type: "new",
-      title: "Light Mode",
-      description: "Added a light mode option\nalongside dark mode.",
-    },
-    {
-      type: "new",
-      title: "Course Editing",
-      description:
-        "You can now add and edit courses to preview grade outcomes.",
-    },
-    {
-      type: "improved",
-      title: "App Design",
-      description:
-        "Refined the color palette, icons, and layout for a cleaner look.",
-    },
     {
       type: "fixed",
       title: "Bug Fixes",
-      description: "Resolved guidance timeout issues and fixed bugs.",
+      description: "Fixed issues with grade and analytics calculations",
+    },
+    {
+      type: "fixed",
+      title: "Decimal Places",
+      description: "Grades and assignments now round to 3 instead of 2 sig figs",
+    },
+    {
+      type: "new",
+      title: "1000+ users",
+      description: (
+        <Link
+          href={`https://prmntr.com/teachassist/reward/user`}
+          className={`my-2 underline`}
+        >
+          <Text>tysm for using the app ^w^</Text>
+        </Link>
+      ),
     },
   ],
 }) => {
@@ -119,7 +120,9 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
             {updates.map((update, index) => (
               <View key={index} className={`mb-6 last:mb-2`}>
                 <View className={`flex-row items-start mb-2`}>
-                  <View className={`bg-baccent/50 rounded-lg p-2 mr-3 mt-1`}>
+                  <View
+                    className={`${isDark ? "bg-appgraydark/40" : "bg-appgraylight/40"} rounded-lg p-2 mr-3 mt-1`}
+                  >
                     <Text className={`text-lg`}>
                       {getUpdateIcon(update.type)}
                     </Text>
@@ -135,14 +138,14 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
                         className={`${getUpdateColor(update.type)} rounded-full px-3 py-1`}
                       >
                         <Text
-                          className={`${isDark ? "text-appwhite/80" : "text-appblack"} text-xs font-medium uppercase`}
+                          className={`${isDark ? "text-appblack" : "text-appblack"} text-xs font-bold uppercase`}
                         >
                           {update.type}
                         </Text>
                       </View>
                     </View>
                     <Text
-                      className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-base leading-6`}
+                      className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-base leading-6 mr-5`}
                     >
                       {update.description}
                     </Text>
