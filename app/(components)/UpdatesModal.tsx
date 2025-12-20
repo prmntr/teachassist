@@ -20,7 +20,7 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.2.0",
+  version = "1.2.1",
   updates = [
     {
       type: "new",
@@ -32,6 +32,12 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
       title: "App Connectivity Issues",
       description:
         "Fixed bugs with the app not playing nice with internet connections",
+    },
+    {
+      type: "fixed",
+      title: "Bug fixes",
+      description:
+        "General bug fixes and speed improvments",
     },
     {
       type: "new",
@@ -86,7 +92,7 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
       <View className={`flex-1 bg-black/50 justify-center items-center px-5`}>
         <View
           className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-2xl w-full max-w-lg overflow-hidden`}
-          style={{ minHeight: "60%" }}
+          style={{ minHeight: "70%" }}
         >
           <View
             className={`bg-gradient-to-l from-blue-500 to-purple-600 px-6 pt-8 pb-5`}

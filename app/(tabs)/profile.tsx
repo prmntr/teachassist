@@ -22,7 +22,7 @@ const ProfileScreen = () => {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const appVersion = "v1.2.0"; //* update w/ app.json
+  const appVersion = "v1.2.1"; //* update w/ app.json
 
   const { theme, toggleTheme, isDark } = useTheme();
 

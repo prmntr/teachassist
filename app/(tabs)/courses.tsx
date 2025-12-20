@@ -26,7 +26,7 @@ import { useTheme } from "../contexts/ThemeContext";
 
 const CoursesScreen = () => {
   const [showUpdates, setShowUpdates] = useState(false);
-  const appVersion = "1.2.0"; // keep in sync with app.json
+  const appVersion = "1.2.1"; // keep in sync with app.json
 
   // Show UpdatesModal once per app update
   useEffect(() => {
