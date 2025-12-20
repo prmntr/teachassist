@@ -237,7 +237,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
     <View className="flex-1 shadow-md">
       <ScrollView
         showsVerticalScrollIndicator={false}
-        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-4 shadow-lg w-full`}
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-5 shadow-lg w-full pb-5`}
       >
         <View className={`mb-5 ${isDark ? "bg-dark4" : "bg-light4"} p-3 py-5 rounded-lg`}>
           <Text

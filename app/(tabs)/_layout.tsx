@@ -3,7 +3,6 @@ import { Tabs } from "expo-router";
 import { Image, View } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
 
-// todo add hollow icon sources
 type TabIconProps = {
   source: any;
   hollowSource: any;

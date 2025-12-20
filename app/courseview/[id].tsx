@@ -1,3 +1,4 @@
+import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -238,7 +239,15 @@ const CourseViewScreen = () => {
     setExpandedAssignments(updatedExpanded);
   };
 
-  const onFetchResult = (result: string) => {
+  const onFetchResult = async (result: string) => {
+    // Check for no internet connection
+    const networkState = await NetInfo.fetch();
+    if (networkState.isConnected === false) {
+      setMessage("No internet connection. Check your network and try again.");
+      setIsLoading(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
     if (result.includes("Login Failed")) {
       setMessage("Session expired. Please log in again.");
       setTimeout(() => router.replace("/signin"), 2000);
@@ -275,7 +284,15 @@ const CourseViewScreen = () => {
     }
   };
 
-  const onError = (error: string) => {
+  const onError = async (error: string) => {
+    // Check for no internet
+    const networkState = await NetInfo.fetch();
+    if (networkState.isConnected === false) {
+      setMessage("No internet connection. Check your network and try again.");
+      setIsLoading(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
     setMessage(`Error: ${error}`);
     setTimeout(() => router.replace("/signin"), 2000);
   };
@@ -409,7 +426,6 @@ const CourseViewScreen = () => {
       });
     };
 
-    
     return (
       <Modal visible={visible} transparent animationType="slide">
         <View className="flex-1 bg-black/50 items-center justify-center px-4">
@@ -949,7 +965,6 @@ const CourseViewScreen = () => {
               </View>
 
               <View className={`flex-row items-center`}>
-                
                 <View className={`mr-3 items-center justify-center`}>
                   <AnimatedProgressWheel
                     size={70}
@@ -1630,7 +1645,8 @@ const CourseViewScreen = () => {
         <Text
           className={`${isDark ? "text-appgraydark" : "text-appgraylight"} text-center mt-3 text-xs`}
         >
-          Analytics are based on summative assignments only.{`\n`}The cake is a lie!
+          Analytics are based on summative assignments only.{`\n`}The cake is a
+          lie!
         </Text>
       </View>
     );

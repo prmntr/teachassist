@@ -27,14 +27,22 @@ const InitialRoute = () => {
   } | null>(null);
 
   // so the user doesn't fake sign in every time
+
   useEffect(() => {
-    checkSavedCredentials();
+    checkSavedCredentialsOrCourses();
   }, []);
 
-  const checkSavedCredentials = async () => {
+  const checkSavedCredentialsOrCourses = async () => {
     try {
       const savedUsername = await SecureStorage.load("ta_username");
       const savedPassword = await SecureStorage.load("ta_password");
+      const savedCourses = await SecureStorage.load("ta_courses");
+
+      if (savedCourses) {
+        // If cached courses exist, go straight to courses tab
+        router.replace("/courses");
+        return;
+      }
 
       if (savedUsername && savedPassword) {
         // try and auto login
@@ -172,7 +180,28 @@ const InitialRoute = () => {
           />
         </View>
       </TouchableOpacity>
-      <Text className={`text-gray-600 text-2xl absolute bottom-5`}>v1.1.3</Text>
+      <TouchableOpacity
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          router.replace("/courses");
+        }}
+      >
+        <View
+          className={`bg-baccent/85 px-5 py-3 rounded-xl shadow-lg flex-row items-center`}
+        >
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
+          >
+            Go to courses DO NOT TOUCH
+          </Text>
+          <Image
+            className={`w-8 h-8`}
+            tintColor={isDark ? "#fafafa" : "#2f3035"}
+            source={require("../assets/images/arrow-icon.png")}
+          />
+        </View>
+      </TouchableOpacity>
+      <Text className={`text-gray-600 text-2xl absolute bottom-5`}>v1.2.0</Text>
     </View>
   );
 };

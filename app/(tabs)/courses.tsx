@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -6,23 +7,43 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  ImageBackground,
+  Linking,
+  // FlatList,
   ScrollView,
   Text,
   TouchableOpacity,
   View,
-  ImageBackground,
-  Linking
-  // FlatList,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
 import { parseStudentGrades, type Course } from "../(components)/CourseParser"; // Update import path
 import GradeAverageTracker from "../(components)/GradeAverage";
 import Messages from "../(components)/Messages";
 import { CourseInfoBox } from "../(components)/QuickCourse";
+import { SnowEffect } from "../(components)/SnowEffect";
+import UpdatesModal from "../(components)/UpdatesModal";
 import { useTheme } from "../contexts/ThemeContext";
 
-
 const CoursesScreen = () => {
+  const [showUpdates, setShowUpdates] = useState(false);
+  const appVersion = "1.2.0"; // keep in sync with app.json
+
+  // Show UpdatesModal once per app update
+  useEffect(() => {
+    const checkAndShowUpdates = async () => {
+      try {
+        const lastSeenVersion =
+          await AsyncStorage.getItem("lastSeenAppVersion");
+        if (lastSeenVersion !== appVersion) {
+          setShowUpdates(true);
+          await AsyncStorage.setItem("lastSeenAppVersion", appVersion);
+        }
+      } catch (e) {
+        setShowUpdates(true);
+      }
+    };
+    checkAndShowUpdates();
+  }, [appVersion]);
   const { isDark } = useTheme();
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,6 +53,20 @@ const CoursesScreen = () => {
     username: string;
     password: string;
   } | null>(null);
+
+  // Christmas
+  const now = new Date();
+  const year = now.getFullYear();
+  const start = new Date(year, 11, 20); // Dec 20
+  const end = new Date(
+    year + (now.getMonth() === 0 ? -1 : 0),
+    0,
+    5,
+    23,
+    59,
+    59,
+    999
+  ); // Jan 5
 
   const router = useRouter();
 
@@ -96,7 +131,36 @@ const CoursesScreen = () => {
 
         if (parsedCourses.length > 0) {
           setMessage(
-            `Found ${parsedCourses.length} course(s). Loading cached data...`
+            `Found ${parsedCourses.length} course(s). Fetching course details...`
+          );
+
+          // Fetch and cache details for each course with subjectId
+          await Promise.all(
+            parsedCourses
+              .filter((course) => course.subjectId)
+              .map(async (course) => {
+                try {
+                  // Use TeachAssistAuthFetcher to fetch course details
+                  // We'll use a Promise and a hidden component approach
+                  // But since this is not a React render, use fetch directly
+                  // If you have a fetchCourseDetails util, use it. Otherwise, fallback to fetch.
+                  // Here, we assume the endpoint is the same as fetchCourseUrl
+                  const courseUrl = `https://ta.yrdsb.ca/live/students/grades.php?subject_id=${course.subjectId}`;
+                  // Try to use fetch, but if cookies/session are needed, this may need to be improved
+                  // For now, just fetch and cache
+                  const html = await fetch(courseUrl)
+                    .then((r) => r.text())
+                    .catch(() => null);
+                  if (html) {
+                    await SecureStorage.save(
+                      `course_${course.subjectId}`,
+                      html
+                    );
+                  }
+                } catch (e) {
+                  // Ignore errors for individual courses
+                }
+              })
           );
 
           // Load cached HTML for courses with subject IDs
@@ -212,6 +276,17 @@ const CoursesScreen = () => {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <UpdatesModal
+        visible={showUpdates}
+        onClose={() => setShowUpdates(false)}
+        version={appVersion}
+      />
+      {(now >= start && now <= new Date(year, 11, 31, 23, 59, 59, 999)) ||
+      (now.getMonth() === 0 && now <= end) ? (
+        <SnowEffect count={37} speed={1.1} drift={26} />
+      ) : (
+        <></>
+      )}
       <View className={`flex-row items-center justify-between mt-18 px-5`}>
         <Text
           className={`text-5xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"}`}
@@ -430,7 +505,9 @@ const CoursesScreen = () => {
               Linking.openURL("market://details?id=com.prmntr.teachassist")
             }
           >
-            <Text className={`text-appgraydark text-center text-md underline`}>leave a review for +10% luck on ur next test :D</Text>
+            <Text className={`text-appgraydark text-center text-md underline`}>
+              leave a review for +10% luck on ur next test :D
+            </Text>
           </TouchableOpacity>
         </ScrollView>
       )}

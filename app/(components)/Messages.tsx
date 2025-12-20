@@ -15,7 +15,7 @@ function Messages() {
     return userName;
   };
 
-  const preMessage = [
+  let preMessage = [
     "Hey, ",
     "Hello, ",
     "Hi ",
@@ -26,7 +26,37 @@ function Messages() {
     "Welcome back, ",
   ];
 
-  const postMessage = ["!", "!", "!", "?", "?", ".", ".", "."];
+  let postMessage = ["!", "!", "!", "?", "?", ".", ".", "."];
+
+  // Christmas message logic
+  const now = new Date();
+  const year = now.getFullYear();
+  const start = new Date(year, 11, 20); // Dec 20
+  const end = new Date(
+    year + (now.getMonth() === 0 ? -1 : 0),
+    0,
+    5,
+    23,
+    59,
+    59,
+    999
+  ); // Jan 5
+
+  if (
+    (now >= start && now <= new Date(year, 11, 31, 23, 59, 59, 999)) ||
+    (now.getMonth() === 0 && now <= end)
+  ) {
+    preMessage = [
+      "Happy Holidays, ",
+      "Happy New Year, ",
+      "",
+      "Touch some snow, ",
+      "What's jollying, ",
+      "Merry Christmas, ",
+    ];
+
+    postMessage = [" ⭐", "🎉", " on the holiday grind...", " ❄️", "?", " 🎄"];
+  }
 
   useEffect(() => {
     getUserName();

@@ -173,7 +173,7 @@ const AppointmentsPage = () => {
         >
           {formatDate(item.date)}
         </Text>
-        <View className={`bg-baccent/70 px-3 py-2 rounded-lg`}>
+        <View className={`bg-baccent/80 px-3 py-2 rounded-lg`}>
           <Text
             className={`${isDark ? "text-appwhite" : "text-appblack"} font-normal`}
           >
@@ -240,14 +240,14 @@ const AppointmentsPage = () => {
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
       <BackButton path={"/guidance"} />
 
-      <View className={`px-5 mt-23 mb-5 items-center `}>
+      <View className={`px-5 mt-23 mb-5 items-center`}>
         <Text
           className={`text-4xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"} mt-8`}
         >
           My Appointments
         </Text>
         <Text
-          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg mt-1`}
+          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center text-lg mt-1`}
         >
           Manage upcoming guidance appointments
         </Text>
@@ -289,14 +289,15 @@ const AppointmentsPage = () => {
           onLoadingChange={setLoading}
         />
       )}
-      <Text
-        className={`absolute bottom-4 text-center mx-8 ${isDark ? "text-appgraydark" : "text-appgraylight"}`}
-        style={{ fontSize: 11 }}
-      >
-        Note: This list is not exaustive! If you booked an appointment off the
-        app or if you signed out recently, it may not show up. It{`'`}s always
-        best to check the TA website to make sure.
-      </Text>
+      <View className="items-center text-center">
+        <Text
+          className={`absolute bottom-4 text-center items-center mx-8 text-sm ${isDark ? "text-appgraydark" : "text-appgraylight"}`}
+        >
+          Note: This list is not exaustive! If you booked an appointment off the
+          app or if you signed out recently, it may not show up. Check the TA
+          website for conformation.
+        </Text>
+      </View>
     </View>
   );
 };

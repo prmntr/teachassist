@@ -16,6 +16,7 @@ import AppointmentBooking from "../(components)/AppointmentBooking";
 import AppointmentReasonForm from "../(components)/AppointmentReasonForm";
 import { useTheme } from "../contexts/ThemeContext";
 import NetInfo from "@react-native-community/netinfo";
+import { SnowEffect } from "../(components)/SnowEffect";
 
 const Guidance = () => {
   const { isDark } = useTheme();
@@ -29,6 +30,20 @@ const Guidance = () => {
   const [bookingResult, setBookingResult] = useState<string | null>(null);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [appointmentFormHtml, setAppointmentFormHtml] = useState<string>("");
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const start = new Date(year, 11, 20); // Dec 20
+  const end = new Date(
+    year + (now.getMonth() === 0 ? -1 : 0),
+    0,
+    5,
+    23,
+    59,
+    59,
+    999
+  ); // Jan 5
+  
   const router = useRouter();
   const [formSubmissionData, setFormSubmissionData] =
     useState<AppointmentFormData | null>(null);
@@ -41,14 +56,14 @@ const Guidance = () => {
   };
 
   const checkGuidanceAvailability = async () => {
-     const netInfo = await NetInfo.fetch();
+    const netInfo = await NetInfo.fetch();
 
-     if (!netInfo.isConnected) {
-       setError(
-         "No internet connection. Please check your connection and try again."
-       );
-       return;
-     }
+    if (!netInfo.isConnected) {
+      setError(
+        "No internet connection. Please check your connection and try again."
+      );
+      return;
+    }
     setError(null);
     setGuidanceResult(null);
     setShowAppointmentForm(false);
@@ -56,7 +71,6 @@ const Guidance = () => {
   };
 
   const handleGuidanceResult = (result: string) => {
-
     // Handle re-authentication success - retry the guidance check
     if (result.includes("REAUTH SUCCESS")) {
       console.log("Re-authentication successful, retrying guidance check...");
@@ -97,7 +111,6 @@ const Guidance = () => {
   };
 
   const handleBookingResult = (result: string) => {
-
     // Handle re-authentication success - retry the booking
     if (result === "REAUTH SUCCESS") {
       console.log("Re-authentication successful, retrying booking...");
@@ -343,9 +356,7 @@ const Guidance = () => {
                 className={` w-30 h-30 my-3`}
                 style={{ tintColor: "#d6363f" }}
               />
-              <Text
-                className={`text-danger text-center text-lg max-w-md`}
-              >
+              <Text className={`text-danger text-center text-lg max-w-md`}>
                 An error occurred:{"\n" + error}
               </Text>
             </View>
@@ -469,6 +480,12 @@ const Guidance = () => {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"} px-5`}>
+      {(now >= start && now <= new Date(year, 11, 31, 23, 59, 59, 999)) ||
+      (now.getMonth() === 0 && now <= end) ? (
+        <SnowEffect count={37} speed={1.1} drift={26} />
+      ) : (
+        <></>
+      )}
       <View className={`flex-row items-center justify-between mt-18`}>
         <Text
           className={`text-5xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"}`}
@@ -478,7 +495,7 @@ const Guidance = () => {
         <View className="shadow-md">
           <TouchableOpacity
             onPress={() => {
-              router.replace("/AppointmentsPage");
+              router.push("/AppointmentsPage");
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
             }}
             disabled={isLoading}

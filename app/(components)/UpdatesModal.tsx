@@ -20,21 +20,22 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.1.3",
+  version = "1.2.0",
   updates = [
     {
-      type: "fixed",
-      title: "Bug Fixes",
-      description: "Fixed issues with grade and analytics calculations",
+      type: "new",
+      title: "Volunteer Tracking",
+      description: "Input, track, and upload your YRDSB volunteer hours.",
     },
     {
-      type: "fixed",
-      title: "Decimal Places",
-      description: "Grades and assignments now round to 3 instead of 2 sig figs",
+      type: "improved",
+      title: "App Connectivity Issues",
+      description:
+        "Fixed bugs with the app not playing nice with internet connections",
     },
     {
       type: "new",
-      title: "1000+ users",
+      title: "2000+ users",
       description: (
         <Link
           href={`https://prmntr.com/teachassist/reward/user`}
@@ -88,7 +89,7 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
           style={{ minHeight: "60%" }}
         >
           <View
-            className={`bg-gradient-to-l from-blue-500 to-purple-600 px-6 py-8`}
+            className={`bg-gradient-to-l from-blue-500 to-purple-600 px-6 pt-8 pb-5`}
           >
             <View className={`flex-row items-center justify-between`}>
               <View className={`flex-1`}>
@@ -176,9 +177,9 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
           </ScrollView>
 
           {/* active:bg-baccent*/}
-          <View className={`px-6 ${isDark ? "bg-dark3" : "bg-light3"} py-5`}>
+          <View className={`px-6 ${isDark ? "bg-dark3" : "bg-light3"} py-4`}>
             <TouchableOpacity
-              className={`${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-xl py-4 px-6 items-center`}
+              className={`${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-xl py-3 px-6 items-center`}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                 onClose();

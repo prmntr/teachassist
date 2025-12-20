@@ -238,43 +238,37 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   const handleTimeout = async () => {
     if (isReauthenticating || loginParams) return;
 
-    console.log("taauth: request exceeded 1.5s, attempting re-authentication...");
+    console.log(
+      "taauth: request exceeded 1.5s, attempting re-authentication..."
+    );
     setIsReauthenticating(true);
 
     try {
       const savedUsername = await SecureStorage.load("ta_username");
       const savedPassword = await SecureStorage.load("ta_password");
 
-      if (!savedUsername || !savedPassword) {
-        onError?.(
-          "Session expired and no saved credentials found. Please log in again."
-        );
+      // If username and password are detected, bypass everything and show courses tab (cached data)
+      if (savedUsername && savedPassword) {
+        const cachedMainHtml = await SecureStorage.load("ta_courses");
+        if (cachedMainHtml) {
+          onResult(cachedMainHtml);
+        } else {
+          onResult(
+            "No cached data available. Please connect to the internet and try again."
+          );
+        }
         onLoadingChange?.(false);
         setIsReauthenticating(false);
         return;
       }
 
-      // Store current request for retry
-      originalRequestRef.current = {
-        fetchCourseUrl,
-        fetchWithCookies,
-        getGuidance,
-        bookAppointment,
-        submitAppointmentForm,
-        cancelAppointment,
-      };
-
-      // Clear timeout
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        setTimeoutId(null);
-      }
-
-      // go to login page
-      const encodedUsername = encodeURIComponent(savedUsername);
-      const encodedPassword = encodeURIComponent(savedPassword);
-      const loginUrl = `https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
-      setTargetUrl(loginUrl);
+      // If no credentials, require login
+      onError?.(
+        "Session expired and no saved credentials found. Please log in again."
+      );
+      onLoadingChange?.(false);
+      setIsReauthenticating(false);
+      return;
     } catch (error) {
       console.error("taauth: Error during re-authentication:", error);
       onError?.("Failed to re-authenticate");
@@ -620,12 +614,8 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           isReauthenticating &&
           html.toLowerCase().includes("student reports")
         ) {
-          console.log(
-            "taauth: reauth WORKED updating session..."
-          );
-          console.log(
-            "1"
-          );
+          console.log("taauth: reauth WORKED updating session...");
+          console.log("1");
           const coursesHtmlString: string = parseStudentGrades(html);
           console.log("2");
           const schoolId = html.match(/school_id=(\d+)/)?.[1];
@@ -634,11 +624,11 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           console.log("4");
           const studentId =
             cookiePairs.find((pair) => pair[0] === "student_id")?.[1] || null;
-            console.log("5");
+          console.log("5");
           const sessionToken =
             cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
             null;
-            console.log("6");
+          console.log("6");
 
           if (studentId && sessionToken && schoolId) {
             await SecureStorage.save("ta_student_id", studentId);
@@ -651,9 +641,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             onLoadingChange?.(false);
             onResult("REAUTH SUCCESS");
           } else {
-            onError?.(
-              "REAUTH FAIL - could not extract session data"
-            );
+            onError?.("REAUTH FAIL - could not extract session data");
             setIsReauthenticating(false);
             onLoadingChange?.(false);
             return;

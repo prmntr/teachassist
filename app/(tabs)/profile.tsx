@@ -9,12 +9,12 @@ import {
   ImageBackground,
   Linking,
   ScrollView,
-  Switch,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import { SecureStorage } from "../(auth)/taauth";
+import { SnowEffect } from "../(components)/SnowEffect";
 import UpdatesModal from "../(components)/UpdatesModal";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -22,7 +22,7 @@ const ProfileScreen = () => {
   const router = useRouter();
 
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const appVersion = "v1.1.3"; //* update w/ app.json
+  const appVersion = "v1.2.0"; //* update w/ app.json
 
   const { theme, toggleTheme, isDark } = useTheme();
 
@@ -31,6 +31,19 @@ const ProfileScreen = () => {
   const [school, setSchool] = useState<string | null>(null);
   const [image, setImage] = useState<string | null>(null);
   const [showUpdates, setShowUpdates] = useState(false);
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const start = new Date(year, 11, 20); // Dec 20
+  const end = new Date(
+    year + (now.getMonth() === 0 ? -1 : 0),
+    0,
+    5,
+    23,
+    59,
+    59,
+    999
+  ); // Jan 5
 
   const getUser = async () => {
     const userName = await SecureStorage.load("ta_username");
@@ -154,9 +167,16 @@ const ProfileScreen = () => {
   };
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      {(now >= start && now <= new Date(year, 11, 31, 23, 59, 59, 999)) ||
+      (now.getMonth() === 0 && now <= end) ? (
+        <SnowEffect count={37} speed={1.1} drift={26} />
+      ) : (
+        <></>
+      )}
       <UpdatesModal
         visible={showUpdates}
         onClose={() => setShowUpdates(false)}
+        version={appVersion.replace(/^v/, "")}
       />
       <ScrollView showsVerticalScrollIndicator={false}>
         <Text
@@ -215,30 +235,50 @@ const ProfileScreen = () => {
             <Text
               className={`text-3xl font-bold ${isDark ? "text-appwhite" : "text-appblack"}`}
             >
-              {userName}
+              {userName ?? "000000000"}
             </Text>
             <Text
               className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg text-center`}
             >
               {school ?? "Unknown School"}
             </Text>
+            {school?.toLocaleLowerCase().includes("bayview") ? (
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.notificationAsync(
+                    Haptics.NotificationFeedbackType.Success
+                  );
+                  // ive only seen interior maps for bayview
+                  if (school?.toLocaleLowerCase().includes("bayview")) {
+                    Linking.openURL("https://www.bayviewstuco.ca/map");
+                  } else {
+                    Alert.alert(
+                      "Your school does not currently have a school map. Make a support ticket if you have one!"
+                    );
+                  }
+                }}
+              >
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} p-1 px-2 mt-2 bg-baccent/50 rounded-lg text-sm text-center`}
+                >
+                  School Map
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <></>
+            )}
             <TouchableOpacity
               onPress={() => {
                 Haptics.notificationAsync(
                   Haptics.NotificationFeedbackType.Success
                 );
-                // ive only seen interior maps for bayview
-                if (school?.toLocaleLowerCase().includes("bayview")) {
-                  Linking.openURL("https://www.bayviewstuco.ca/map");
-                } else {
-                  Alert.alert("Your school does not currently have a school map. Make a support ticket if you have one!")
-                }
+                router.push("/VolunteerTracking");
               }}
             >
               <Text
-                className={`${isDark ? "text-appwhite" : "text-appblack"} p-1 px-2 mt-2 bg-baccent/50 rounded-lg text-sm text-center`}
+                className={`${isDark ? "text-appwhite" : "text-appblack"} p-1 px-2 mt-2 bg-success/50 rounded-lg text-sm text-center`}
               >
-                School Map
+                My Volunteer Hours
               </Text>
             </TouchableOpacity>
           </View>
@@ -301,12 +341,17 @@ const ProfileScreen = () => {
                     Keep up to date on your latest grades
                   </Text>
                 </View>
-                <Switch
-                  value={notificationsEnabled}
-                  onValueChange={handleNotificationToggle}
-                  trackColor={{ false: "#374151", true: "#10B981" }}
-                  thumbColor={notificationsEnabled ? "#FFFFFF" : "#9CA3AF"}
-                />
+                <TouchableOpacity
+                  className={`w-13 h-8 rounded-full ${notificationsEnabled ? "bg-baccent" : isDark ? "bg-dark4" : "bg-light4"} flex-row items-center`}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    handleNotificationToggle(!notificationsEnabled);
+                  }}
+                >
+                  <View
+                    className={`w-6 h-6 rounded-full bg-white shadow-md transition-all duration-200 ${notificationsEnabled ? "ml-6" : "ml-0.5"}`}
+                  />
+                </TouchableOpacity>
               </View>
             </View>
 

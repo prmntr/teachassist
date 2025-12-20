@@ -23,7 +23,7 @@ const Sorry = () => {
 
         <Link
           href="/"
-          className={`text-white font-semibold text-3xl bg-baccent/70 px-5 py-3 rounded-lg mt-10`}
+          className={`text-white font-semibold text-3xl bg-baccent/80 px-5 py-3 rounded-lg mt-10`}
           onPress={() => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           }}

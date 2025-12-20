@@ -71,7 +71,7 @@ const Guidance = () => {
 
       <Link
         href="/profile"
-        className={`mt-5 font-bold bg-baccent/70 ${isDark ? "text-appwhite" : "text-appblack"} py-2 rounded-lg text-lg text-center flex`}
+        className={`mt-5 font-bold bg-baccent/80 ${isDark ? "text-appwhite" : "text-appblack"} py-2 rounded-lg text-lg text-center flex`}
       >
         <Text>Go back</Text>
       </Link>
