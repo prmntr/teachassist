@@ -2,7 +2,7 @@
   "expo": {
     "name": "TeachAssist",
     "slug": "teachassist",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "orientation": "portrait",
     "icon": "./assets/images/playstore-icon-transparent.png",
     "scheme": "teachassist",

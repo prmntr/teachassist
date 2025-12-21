@@ -20,12 +20,12 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.2.1",
+  version = "1.2.2",
   updates = [
     {
       type: "new",
       title: "Volunteer Tracking",
-      description: "Input, track, and upload your YRDSB volunteer hours.",
+      description: "Input, track, and update your YRDSB volunteer hours.",
     },
     {
       type: "improved",

@@ -76,9 +76,10 @@ interface TeachAssistAuthFetcherProps {
 }
 
 interface WebViewDataMessage {
-  type: "htmlAndCookies";
-  html: string;
-  cookies: string;
+  type: "htmlAndCookies" | "error";
+  html?: string;
+  cookies?: string;
+  data?: string;
 }
 
 // main function: recieves all these props
@@ -236,39 +237,53 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
   // if it takes too long, it's prob b/c cookies expired, this reauths it
   const handleTimeout = async () => {
-    if (isReauthenticating || loginParams) return;
+    // If the caller is already explicitly logging in, don't try to hijack the flow.
+    if (loginParams || isReauthenticating) return;
 
     console.log(
       "taauth: request exceeded 1.5s, attempting re-authentication..."
     );
+
+    // Save what we were trying to do so we can decide what to do after reauth.
+    if (!originalRequestRef.current) {
+      originalRequestRef.current = {
+        fetchCourseUrl,
+        fetchWithCookies,
+        getGuidance,
+        bookAppointment,
+        submitAppointmentForm,
+        cancelAppointment,
+      };
+    }
+
     setIsReauthenticating(true);
 
     try {
       const savedUsername = await SecureStorage.load("ta_username");
       const savedPassword = await SecureStorage.load("ta_password");
 
-      // If username and password are detected, bypass everything and show courses tab (cached data)
-      if (savedUsername && savedPassword) {
-        const cachedMainHtml = await SecureStorage.load("ta_courses");
-        if (cachedMainHtml) {
-          onResult(cachedMainHtml);
-        } else {
-          onResult(
-            "No cached data available. Please connect to the internet and try again."
-          );
-        }
+      if (!savedUsername || !savedPassword) {
+        onError?.(
+          "Session expired and no saved credentials found. Please log in again."
+        );
         onLoadingChange?.(false);
         setIsReauthenticating(false);
         return;
       }
 
-      // If no credentials, require login
-      onError?.(
-        "Session expired and no saved credentials found. Please log in again."
-      );
-      onLoadingChange?.(false);
-      setIsReauthenticating(false);
-      return;
+      // Force a real re-login so TeachAssist issues fresh cookies.
+      const encodedUsername = encodeURIComponent(savedUsername);
+      const encodedPassword = encodeURIComponent(savedPassword);
+      const loginUrl = `https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
+      console.log("taauth: Re-authentication login URL set");
+      setTargetUrl(loginUrl);
+
+      // Give reauth a slightly longer leash than normal page loads.
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      const timeout = setTimeout(handleTimeout, 4000);
+      setTimeoutId(timeout);
     } catch (error) {
       console.error("taauth: Error during re-authentication:", error);
       onError?.("Failed to re-authenticate");
@@ -431,50 +446,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     "endDate": "2026-01-29",
     "grade": "93",
     "hasGrade": true
-  },
-  {
-    "courseCode": "MHF3U1-5",
-    "courseName": "Functions",
-    "block": "2",
-    "room": "67",
-    "startDate": "2025-09-02",
-    "semester": 1,
-    "endDate": "2026-01-29",
-    "grade": "99",
-    "hasGrade": true
-  },
-  {
-    "courseCode": "FRNCH-1",
-    "courseName": "French As A Second language",
-    "block": "4",
-    "room": "41",
-    "startDate": "2025-09-02",
-    "semester": 1,
-    "endDate": "2026-01-29",
-    "grade": "84",
-    "hasGrade": true
-  },
-  {
-    "courseCode": "LUNCH-3",
-    "courseName": "Lunch",
-    "block": "3",
-    "room": "CAF",
-    "startDate": "2025-09-02",
-    "semester": 1,
-    "endDate": "2026-01-29",
-    "grade": "See teacher",
-    "hasGrade": false
-  },
-  {
-    "courseCode": "SCH4U1-1",
-    "courseName": "Chemistry",
-    "block": "5",
-    "room": "42",
-    "startDate": "2026-01-30",
-    "semester": 1,
-    "endDate": "2026-06-24",
-    "grade": "94",
-    "hasGrade": true
   }
 ]`
           );
@@ -574,14 +545,30 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   }, [timeoutId]);
 
   const getInjectedJavaScript = () => {
+    // IMPORTANT:
+    // - document.cookie can throw SecurityError on Android in some contexts (e.g., about:blank / redirect frames).
+    // - We do NOT want that to become a fatal error. Cookies are best-effort.
     return `
       (function() {
+        var html = "";
+        var cookies = "";
         try {
-          const html = document.documentElement.outerHTML;
-          const cookies = document.cookie;
+          html = document.documentElement ? document.documentElement.outerHTML : "";
+        } catch (e) {
+          html = "";
+        }
+
+        try {
+          cookies = document.cookie || "";
+        } catch (e) {
+          // Access denied in some WebView contexts; treat as "no readable cookies", NOT an error.
+          cookies = "";
+        }
+
+        try {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'htmlAndCookies', html: html, cookies: cookies }));
-        } catch (error) {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'error', data: error.toString() }));
+        } catch (e) {
+          // If even postMessage fails, there's nothing useful we can do.
         }
       })();
     `;
@@ -599,62 +586,102 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   // the webview has fetched whatever html was requested, handle it here
   const handleMessage = async (event: WebViewMessageEvent) => {
     try {
-      // Clear timeout when we receive response
+      // clear on response recieved
       if (timeoutId) {
         clearTimeout(timeoutId);
         setTimeoutId(null);
       }
 
       const message: WebViewDataMessage = JSON.parse(event.nativeEvent.data);
-      if (message.type === "htmlAndCookies") {
-        let { html, cookies } = message;
 
-        // got main page, we're done
+      // If we ever get an injected "error" message, do NOT kill the whole flow.
+      // It’s almost always a transient WebView context issue.
+      if (message.type === "error") {
+        console.warn("taauth: Non-fatal injected error:", message.data);
+        return;
+      }
+
+      if (message.type === "htmlAndCookies") {
+        const html = message.html ?? "";
+        const cookies = message.cookies ?? "";
+
+        // Guard: ignore empty/near-empty payloads from intermediate documents (about:blank etc.)
+        // This avoids accidentally parsing garbage and "succeeding" with nonsense.
+        if (html.trim().length < 50) {
+          console.log(
+            "taauth: Ignoring tiny HTML payload (likely intermediate)"
+          );
+          return;
+        }
+
+        // Re-auth flow: after a timeout we intentionally navigate through login again.
         if (
           isReauthenticating &&
           html.toLowerCase().includes("student reports")
         ) {
           console.log("taauth: reauth WORKED updating session...");
-          console.log("1");
+
           const coursesHtmlString: string = parseStudentGrades(html);
-          console.log("2");
           const schoolId = html.match(/school_id=(\d+)/)?.[1];
-          console.log("3");
-          const cookiePairs = cookies.split("; ").map((c) => c.split("="));
-          console.log("4");
+
+          // Cookies might be unreadable (""), so extraction must be resilient.
+          const cookiePairs =
+            cookies.length > 0
+              ? cookies.split("; ").map((c) => c.split("="))
+              : [];
+
           const studentId =
             cookiePairs.find((pair) => pair[0] === "student_id")?.[1] || null;
-          console.log("5");
           const sessionToken =
             cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
             null;
-          console.log("6");
 
-          if (studentId && sessionToken && schoolId) {
-            await SecureStorage.save("ta_student_id", studentId);
-            await SecureStorage.save("ta_session_token", sessionToken);
+          // If cookies were unreadable via JS, we may not have studentId/sessionToken here.
+          // In that case: DON'T overwrite existing stored cookies with nulls; just treat reauth as "page refreshed".
+          if (schoolId) {
             await SecureStorage.save("ta_courses", coursesHtmlString);
             await SecureStorage.save("school_id", schoolId);
+          }
 
-            // retry org request
-            await retryOriginalRequest();
-            onLoadingChange?.(false);
-            onResult("REAUTH SUCCESS");
+          if (studentId && sessionToken) {
+            await SecureStorage.save("ta_student_id", studentId);
+            await SecureStorage.save("ta_session_token", sessionToken);
+            await SecureStorage.save("ta_cookies", cookies);
           } else {
-            onError?.("REAUTH FAIL - could not extract session data");
-            setIsReauthenticating(false);
-            onLoadingChange?.(false);
+            console.warn(
+              "taauth: Reauth reached Student Reports but JS couldn't read cookies (expected sometimes on Android). Keeping existing stored session cookies."
+            );
+          }
+
+          const originalRequest = originalRequestRef.current;
+          const shouldShowAppointmentRefreshNotice = Boolean(
+            originalRequest?.getGuidance ||
+            originalRequest?.bookAppointment ||
+            originalRequest?.submitAppointmentForm ||
+            originalRequest?.cancelAppointment
+          );
+
+          setIsReauthenticating(false);
+          onLoadingChange?.(false);
+
+          if (shouldShowAppointmentRefreshNotice) {
+            originalRequestRef.current = null;
+            onResult(html);
             return;
           }
+
+          await retryOriginalRequest();
+          originalRequestRef.current = null;
+          onResult("REAUTH SUCCESS");
+          return;
         }
 
-        // Reset re-authentication state for successful operations
         if (isReauthenticating && !html.toLowerCase().includes("log in")) {
           setIsReauthenticating(false);
           originalRequestRef.current = null;
         }
 
-        // only for init login
+        // only for init logins
         if (loginParams) {
           if (html.toLowerCase().includes("log in")) {
             onResult(
@@ -665,31 +692,38 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
             const coursesHtmlString: string = parseStudentGrades(html);
 
-            // get school id for guidance
+            // school id for guidance
             const schoolId = html.match(/school_id=(\d+)/)?.[1];
 
-            const cookiePairs = cookies.split("; ").map((c) => c.split("="));
+            const cookiePairs =
+              cookies.length > 0
+                ? cookies.split("; ").map((c) => c.split("="))
+                : [];
+
             const studentId =
               cookiePairs.find((pair) => pair[0] === "student_id")?.[1] || null;
             const sessionToken =
               cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
               null;
+
             if (studentId && sessionToken && schoolId) {
               // save everything
               await SecureStorage.save("ta_username", loginParams.username);
               await SecureStorage.save("ta_password", loginParams.password);
               await SecureStorage.save("ta_student_id", studentId);
               await SecureStorage.save("ta_session_token", sessionToken);
-              console.warn(sessionToken);
               await SecureStorage.save("ta_courses", coursesHtmlString);
               await SecureStorage.save("school_id", schoolId);
+              await SecureStorage.save("ta_cookies", cookies);
               await fetchSchoolName(schoolId);
 
               onLoadingChange?.(false);
               onResult("Login Success");
             } else {
               onLoadingChange?.(false);
-              onResult("Login Failed: Could not find required cookies.");
+              onResult(
+                "Login Failed: Could not find required cookies (webview might be) cookie access may be blocked)."
+              );
             }
           } else {
             onResult("Login Failed: Unexpected content. Contact support!");
@@ -766,7 +800,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
             onResult("Appointment cancelled successfully!");
           } else {
-            // Even if we don't see explicit confirmation, remove from local storage
+            // ta doesnt give conf so remove from storage
             if (cancelAppointment.id) {
               await removeAppointmentData(cancelAppointment.id);
             }
@@ -784,7 +818,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           ) {
             console.log("taauth: appointment form submitted successfully");
 
-            // Save appointment data when form is successfully submitted
+            // save appt data when submitted form
             if (submitAppointmentForm.hiddenFields) {
               const appointmentDetails = {
                 date:
@@ -810,15 +844,11 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             console.log("taauth: form submission failed");
             onResult("Failed to submit appointment form. Please try again.");
           } else {
-            // assume success if we get a valid response without error indicators
+            // assume success if no error indicator
             console.log("taauth: form submission completed");
             onResult("Appointment request submitted successfully!");
           }
         }
-      } else if (message.type === "error") {
-        console.error("taauth: WebView error:", message);
-        onError?.(`taauth: WebView error: ${message}`);
-        onResult("Operation Failed: WebView Error");
       }
     } catch (error: any) {
       console.error(
@@ -856,7 +886,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       JSON.stringify(nativeEvent, null, 2)
     );
 
-    // Clear timeout on error
+    // clear timeout on error
     if (timeoutId) {
       clearTimeout(timeoutId);
       setTimeoutId(null);
@@ -899,7 +929,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             const { nativeEvent } = syntheticEvent;
             console.error("taauth: WebView navigation error:", nativeEvent);
 
-            // Clear timeout on error
             if (timeoutId) {
               clearTimeout(timeoutId);
               setTimeoutId(null);
