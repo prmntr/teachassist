@@ -53,11 +53,24 @@ const safeGetText = (el: any): string => (el ? textContent(el).trim() : "");
 
 // Helper to parse score cells - now handles both "weight=X" and "no weight" cases
 const parseScoreCell = (cellText: string) => {
-  if (!cellText || !cellText.includes("/") || !cellText.includes("%"))
-    return null;
+  if (!cellText || !cellText.includes("/")) return null;
 
   const scoreMatch = cellText.match(/([\d\.]+\s*\/\s*[\d\.]+)/);
   const percentageMatch = cellText.match(/(\d+%)/);
+  let percentage = percentageMatch ? percentageMatch[1] : "";
+
+  if (!percentage && scoreMatch) {
+    const numericMatch = cellText.match(
+      /(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/
+    );
+    if (numericMatch) {
+      const earned = parseFloat(numericMatch[1]);
+      const possible = parseFloat(numericMatch[2]);
+      if (!isNaN(earned) && !isNaN(possible) && possible > 0) {
+        percentage = `${Math.round((earned / possible) * 100)}%`;
+      }
+    }
+  }
 
   // Handle both "weight=X" and "no weight" patterns
   let weight = "";
@@ -72,7 +85,7 @@ const parseScoreCell = (cellText: string) => {
 
   return {
     score: scoreMatch ? scoreMatch[1] : "N/A",
-    percentage: percentageMatch ? percentageMatch[1] : "",
+    percentage,
     weight: weight,
   };
 };
@@ -178,11 +191,6 @@ const extractFeedback = (assignmentCell: any): string => {
         cleanedFeedback.substring(0, 50) + "..."
       );
       return cleanedFeedback;
-    } else {
-      console.warn(
-        "probably no feedback, " + 
-        cleanedFeedback
-      );
     }
   } else {
     console.warn(
@@ -207,15 +215,25 @@ const parseCourseWeightings = (dom: any): CourseWeightings => {
   // Find all tables in the DOM
   const tables = findAll((el) => el.tagName === "table", dom);
 
-  // Look for the table that contains category weightings
+  // Look for the table that contains course weightings
   let weightingTable = null;
+  const normalizeTableText = (text: string) =>
+    text.replace(/\s+/g, " ").trim().toLowerCase();
+  const compactTableText = (text: string) =>
+    text.replace(/\s+/g, "").trim().toLowerCase();
+
   for (const table of tables) {
     const tableText = safeGetText(table);
-    if (
-      tableText.includes("Category") &&
-      tableText.includes("Weighting") &&
-      tableText.includes("Student Achievement")
-    ) {
+    const normalized = normalizeTableText(tableText);
+    const compact = compactTableText(tableText);
+    // Normalize whitespace because TeachAssist sometimes inserts line breaks between header words.
+    const hasCategory = normalized.includes("category") || compact.includes("category");
+    const hasCourseWeighting =
+      normalized.includes("course weighting") || compact.includes("courseweighting");
+    const hasStudentAchievement =
+      normalized.includes("student achievement") || compact.includes("studentachievement");
+
+    if (hasCategory && hasCourseWeighting && hasStudentAchievement) {
       weightingTable = table;
       break;
     }
@@ -229,23 +247,34 @@ const parseCourseWeightings = (dom: any): CourseWeightings => {
   // Find all rows in the weighting table
   const rows = findAll((el) => el.tagName === "tr", weightingTable);
 
+  const extractPercentage = (text: string): string => {
+    const match = text.match(/(\d+%)/);
+    return match ? match[1] : "";
+  };
+
   for (const row of rows) {
     const cells = findAll((el) => el.tagName === "td", row);
     if (cells.length === 0) continue; // Skip header row
 
     const categoryName = safeGetText(cells[0]).toLowerCase();
 
-    // Extract percentages from the row
-    const rowText = safeGetText(row);
-    const percentages = rowText.match(/(\d+%)/g) || [];
-
     let courseWeighting = "";
 
-    // Apply the logic: if 3 percentages, take 2nd; if 2 percentages, take 1st
-    if (percentages.length >= 3) {
-      courseWeighting = percentages[1]; // 2nd percentage (Course Weighting column)
-    } else if (percentages.length === 2) {
-      courseWeighting = percentages[0]; // 1st percentage (for Final/Culminating)
+    // Prefer the "Course Weighting" column over "Weighting".
+    if (cells.length >= 4) {
+      courseWeighting = extractPercentage(safeGetText(cells[2]));
+    } else if (cells.length === 3) {
+      courseWeighting = extractPercentage(safeGetText(cells[1]));
+    }
+
+    if (!courseWeighting) {
+      const rowText = safeGetText(row);
+      const percentages = rowText.match(/(\d+%)/g) || [];
+      if (percentages.length >= 3) {
+        courseWeighting = percentages[1];
+      } else if (percentages.length === 2) {
+        courseWeighting = percentages[0];
+      }
     }
 
     // Map category names to our structure
@@ -280,7 +309,6 @@ const parseCourseWeightings = (dom: any): CourseWeightings => {
 
 // Parse assignments from HTML
 const parseAssignments = (dom: any): Assignment[] => {
-  console.log(dom);
   const assignments: Assignment[] = [];
 
   // Find all TD elements with rowspan="2", these are assignment name cells

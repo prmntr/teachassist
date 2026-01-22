@@ -3,6 +3,7 @@ import { Link, useRouter } from "expo-router";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import BackButton from "../(components)/Back";
 import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact } from "../(utils)/haptics";
 
 // Some messages to show the user, no meaningful impact
 
@@ -57,7 +58,7 @@ const Onboarding = () => {
 
         <TouchableOpacity
           onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
             router.replace("/signin");
           }}
         >

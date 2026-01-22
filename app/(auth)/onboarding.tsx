@@ -1,76 +1,156 @@
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useRouter } from "expo-router";
-import { Image, Text, TouchableOpacity, View } from "react-native";
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import BackButton from "../(components)/Back";
 import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact } from "../(utils)/haptics";
 
-// Will be added back in future versions
+const styles = StyleSheet.create({
+  backgroundVideo: {
+    ...StyleSheet.absoluteFillObject,
+  },
+});
+
+const HIGHLIGHTS = [
+  {
+    title: "Grade tracking",
+    body: "View current marks and performance across all your classes.",
+    icon: require("../../assets/images/sparkle.png"),
+  },
+  {
+    title: "Guidance booking",
+    body: "Book, view, and cancel guidance appointments all in one place.",
+    icon: require("../../assets/images/calendar-icon.png"),
+  },
+  {
+    title: "Mark alerts",
+    body: "Get notified when new marks are posted, updated, or hidden.",
+    icon: require("../../assets/images/lightning.png"),
+  },
+  {
+    title: "No snooping",
+    body: "Your data stays on device and talks directly to TeachAssist servers.",
+    icon: require("../../assets/images/privacy.png"),
+  },
+];
 
 const Onboarding = () => {
   const router = useRouter();
   const { isDark } = useTheme();
+
+  const wordmark = isDark
+    ? require("../../assets/images/teachassist-wordmark.png")
+    : require("../../assets/images/teachassist-wordmark-light.png");
+  const backgroundVideo = isDark
+    ? require("../../assets/images/bubble-wallpaper.mp4")
+    : require("../../assets/images/bubble-wallpaper-light.mp4");
+  const backgroundPlayer = useVideoPlayer(backgroundVideo, (player) => {
+    player.loop = true;
+    player.muted = true;
+    player.play();
+  });
+
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
-      <TouchableOpacity
-        className={`absolute top-15 left-5 flex flex-row items-center gap-2 bg-gray-700/80 rounded-lg px-4 py-2 shadow-lg`}
-        onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          router.replace("/messages");
-        }}
-      >
-        <Image
-          className={`w-8 h-8`}
-          style={{ tintColor: "#edebea" }}
-          source={require("../../assets/images/arrow-icon-left.png")}
-        />
-        <Text className={`text-white font-semibold text-lg`}>Back</Text>
-      </TouchableOpacity>
-      <View className={`flex-1 items-center justify-center px-6`}>
-        <Text
-          className={`text-4xl font-bold ${isDark ? "text-appwhite" : "text-appblack"} mb-10`}
-        >
-          Who Are You?
-        </Text>
-        <View className={`w-full`}>
-          {/* space-y-5 doesn't work wtf fuck nativewind i already had to define my own spaces and now they pull this bullshit */}
+      <VideoView
+        player={backgroundPlayer}
+        style={styles.backgroundVideo}
+        contentFit="cover"
+        pointerEvents="none"
+        nativeControls={false}
+      />
+      <LinearGradient
+        colors={
+          isDark
+            ? ["rgba(8, 10, 14, 0.2)", "rgba(8, 10, 14, 0.96)"]
+            : ["rgba(248, 250, 252, 0.2)", "rgba(248, 250, 252, 0.96)"]
+        }
+        style={StyleSheet.absoluteFillObject}
+        pointerEvents="none"
+      />
+      <BackButton path={"/"} />
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <View className={`px-6 pt-24 pb-10`}>
+          <View className={`items-center`}>
+            <Image
+              source={wordmark}
+              className={`w-56 h-16 mt-7`}
+              resizeMode="contain"
+            />
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold mt-4`}
+            >
+              Welcome to TeachAssist
+            </Text>
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-light text-center mt-0`}
+            >
+              Everything you need to stay on top of marks.
+            </Text>
+          </View>
+          <View className={`mt-8`}>
+            {HIGHLIGHTS.map((item) => (
+              <View
+                key={item.title}
+                className={`${isDark ? "bg-dark3/75" : "bg-light3/85"} rounded-2xl px-4 py-4 flex-row items-start mb-4`}
+              >
+                <View
+                  className={`w-12 h-12 rounded-xl ${isDark ? "bg-dark4/80" : "bg-light4/80"} items-center justify-center mr-4`}
+                >
+                  <Image
+                    source={item.icon}
+                    className={`w-7 h-7`}
+                    style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
+                  />
+                </View>
+                <View className={`flex-1`}>
+                  <Text
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-light`}
+                  >
+                    {item.title}
+                  </Text>
+                  <Text
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm font-light mt-1`}
+                  >
+                    {item.body}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
           <TouchableOpacity
-            className={`bg-dark4 rounded-xl py-4 px-6 shadow-md flex flex-row items-baseline place-items-baseline justify-center gap-3 mb-5`}
+            className={`mt-8`}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.replace("/signin");
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+              router.push("/signin");
             }}
           >
-            <Text className={`text-white font-normal text-3xl text-center`}>
-              🧑‍🎓 I&apos;m a{" "}
-              <Text className={`text-baccent font-semibold`}>student</Text>
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`bg-dark4 rounded-xl py-4 px-6 shadow-md flex flex-row items-baseline place-items-baseline justify-center gap-3 mb-5`}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.replace("/sorry");
-            }}
-          >
-            <Text className={`text-white font-normal text-3xl text-center`}>
-              🧑‍🏫 I&apos;m an{" "}
-              <Text className={`text-baccent font-semibold`}>educator</Text>
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            className={`bg-dark4 rounded-xl py-4 px-6 shadow-md flex flex-row items-baseline place-items-baseline justify-center gap-3 mb-5`}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.replace("/sorry");
-            }}
-          >
-            {/*//? Maybe should be removed since no one uses parent portal */}
-            <Text className={`text-white font-normal text-3xl text-center`}>
-              🏡 I&apos;m a{" "}
-              <Text className={`text-baccent font-semibold`}>parent</Text>
-            </Text>
+            <View
+              className={`bg-baccent/90 px-5 py-3 rounded-xl shadow-lg flex-row items-center justify-center`}
+            >
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
+              >
+                Continue
+              </Text>
+              <Image
+                className={`w-8 h-8`}
+                tintColor={isDark ? "#fafafa" : "#2f3035"}
+                source={require("../../assets/images/arrow-icon.png")}
+              />
+            </View>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 };

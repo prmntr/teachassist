@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Image, Text, View } from "react-native";
+import { Image, Text, TouchableOpacity, View } from "react-native";
 import AnimatedProgressWheel from "react-native-progress-wheel";
 import { SecureStorage } from "../(auth)/taauth";
 import { useTheme } from "../contexts/ThemeContext";
@@ -20,18 +20,29 @@ interface GradeAverageTrackerProps {
   showTrend?: boolean;
   showCourseCount?: boolean;
   showLastUpdated?: boolean;
+  hideMarksUntilTap?: boolean;
 }
 
 const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   showTrend = true,
   showCourseCount = true,
   showLastUpdated = false,
+  hideMarksUntilTap = false,
 }) => {
   const { isDark } = useTheme();
 
   const [gradeStats, setGradeStats] = useState<GradeStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [revealAverage, setRevealAverage] = useState(false);
+  const [revealChange, setRevealChange] = useState(false);
+
+  useEffect(() => {
+    if (hideMarksUntilTap) {
+      setRevealAverage(false);
+      setRevealChange(false);
+    }
+  }, [hideMarksUntilTap, gradeStats?.currentAverage, gradeStats?.previousAverage]);
 
   const calculateAverageFromCourses = (courses: Course[]): number | null => {
     const gradedCourses = courses.filter((course) => {
@@ -269,38 +280,64 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
     );
   }
 
+  const showAverage = !hideMarksUntilTap || revealAverage;
+  const showChange = !hideMarksUntilTap || revealChange;
+
   return (
     <View
       className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mt-1 flex-row items-center justify-center`}
     >
-      <View className={`flex-column items-center justify-center mr-5`}>
+      <TouchableOpacity
+        activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+        onPress={() => {
+          if (!hideMarksUntilTap) return;
+          setRevealAverage((prev) => !prev);
+        }}
+        disabled={!hideMarksUntilTap}
+        className="mr-5"
+      >
         <View className="items-center justify-center">
-          <AnimatedProgressWheel
-            size={125}
-            width={13}
-            color={gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f"}
-            backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-            progress={gradeStats.currentAverage}
-            max={100}
-            rounded={true}
-            rotation={"-90deg"}
-            delay={75}
-            duration={400}
-            showPercentageSymbol={true}
-          />
-          <View className="absolute">
-            <Text
-              style={{
-                color: gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f",
-                fontSize: 24,
-                fontWeight: "600",
-              }}
+          {showAverage ? (
+            <View className="items-center justify-center">
+              <AnimatedProgressWheel
+                size={125}
+                width={13}
+                color={gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f"}
+                backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                progress={gradeStats.currentAverage}
+                max={100}
+                rounded={true}
+                rotation={"-90deg"}
+                delay={75}
+                duration={400}
+                showPercentageSymbol={true}
+              />
+              <View className="absolute">
+                <Text
+                  style={{
+                    color: gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f",
+                    fontSize: 24,
+                    fontWeight: "600",
+                  }}
+                >
+                  {gradeStats.currentAverage.toFixed(1)}%{/* TA only has up to 1 */}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View
+              className={`${isDark ? "bg-dark4 " : "bg-light4 "} items-center justify-center`}
+              style={{ width: 125, height: 125, borderRadius: 999 }}
             >
-              {gradeStats.currentAverage.toFixed(1)}%{/* TA only has up to 1 */}
-            </Text>
-          </View>
+              <Text
+                className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center font-semibold px-3`}
+              >
+                Tap to reveal average
+              </Text>
+            </View>
+          )}
         </View>
-      </View>
+      </TouchableOpacity>
       <View className={`flex-column justify-start items-start`}>
         <Text
           className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold`}
@@ -308,17 +345,38 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           Grade Average
         </Text>
         {gradeStats.previousAverage !== null && (
-          <View className={`flex-row items-center`}>
-            {getTrendIcon(gradeStats.trend)}
-            <Text
-              className={`text-2xl font-bold ml-1 ${getTrendColor(gradeStats.trend)}`}
-            >
-              {Math.abs(
-                gradeStats.currentAverage - gradeStats.previousAverage
-              ).toFixed(1)}
-              %
-            </Text>
-          </View>
+          <TouchableOpacity
+            activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+            onPress={() => {
+              if (!hideMarksUntilTap) return;
+              setRevealChange((prev) => !prev);
+            }}
+            disabled={!hideMarksUntilTap}
+          >
+            {showChange ? (
+              <View className={`flex-row items-center`}>
+                {getTrendIcon(gradeStats.trend)}
+                <Text
+                  className={`text-2xl font-bold ml-1 ${getTrendColor(gradeStats.trend)}`}
+                >
+                  {Math.abs(
+                    gradeStats.currentAverage - gradeStats.previousAverage
+                  ).toFixed(1)}
+                  %
+                </Text>
+              </View>
+            ) : (
+              <View
+                className={`${isDark ? "bg-dark4" : "bg-light4"} px-3 py-1 rounded-full`}
+              >
+                <Text
+                  className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-semibold`}
+                >
+                  Tap to reveal change
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
         )}
         <View className={`flex-column justify-start items-start`}>
           {showCourseCount && (

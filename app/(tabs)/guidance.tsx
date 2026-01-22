@@ -1,4 +1,5 @@
 import DateTimePicker from "@react-native-community/datetimepicker";
+import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useState } from "react";
@@ -12,11 +13,13 @@ import {
   View,
 } from "react-native";
 import TeachAssistAuthFetcher, { AppointmentFormData } from "../(auth)/taauth";
-import AppointmentBooking from "../(components)/AppointmentBooking";
+import AppointmentBooking, {
+  type AppointmentSlot,
+} from "../(components)/AppointmentBooking";
 import AppointmentReasonForm from "../(components)/AppointmentReasonForm";
-import { useTheme } from "../contexts/ThemeContext";
-import NetInfo from "@react-native-community/netinfo";
 import { SnowEffect } from "../(components)/SnowEffect";
+import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact } from "../(utils)/haptics";
 
 const Guidance = () => {
   const { isDark } = useTheme();
@@ -30,6 +33,26 @@ const Guidance = () => {
   const [bookingResult, setBookingResult] = useState<string | null>(null);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [appointmentFormHtml, setAppointmentFormHtml] = useState<string>("");
+  const [pendingAppointmentMeta, setPendingAppointmentMeta] = useState<{
+    teacher?: string;
+    subject?: string;
+  } | null>(null);
+
+  const normalizePickerDate = (date: Date): Date => {
+    if (
+      date.getHours() === 0 &&
+      date.getMinutes() === 0 &&
+      date.getSeconds() === 0 &&
+      date.getMilliseconds() === 0
+    ) {
+      return date;
+    }
+    return new Date(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    );
+  };
 
   const now = new Date();
   const year = now.getFullYear();
@@ -41,9 +64,9 @@ const Guidance = () => {
     23,
     59,
     59,
-    999
+    999,
   ); // Jan 5
-  
+
   const router = useRouter();
   const [formSubmissionData, setFormSubmissionData] =
     useState<AppointmentFormData | null>(null);
@@ -51,7 +74,7 @@ const Guidance = () => {
   const handleDateChange = (event: any, date?: Date) => {
     setShowDatePicker(false);
     if (date) {
-      setSelectedDate(date);
+      setSelectedDate(normalizePickerDate(date));
     }
   };
 
@@ -60,7 +83,7 @@ const Guidance = () => {
 
     if (!netInfo.isConnected) {
       setError(
-        "No internet connection. Please check your connection and try again."
+        "No internet connection. Please check your connection and try again.",
       );
       return;
     }
@@ -93,7 +116,7 @@ const Guidance = () => {
     console.log(
       "appointment is " + html.includes('name="reason"') &&
         html.includes('type="radio"') &&
-        html.includes("Submit Reason")
+        html.includes("Submit Reason"),
     );
     return (
       html.includes('name="reason"') &&
@@ -103,9 +126,12 @@ const Guidance = () => {
   };
 
   // handle appointment booking using taauth
-  const handleAppointmentPress = (link: string) => {
-    console.log("Booking appointment with link:", link);
-    setBookingUrl(link);
+  const handleAppointmentPress = (appointment: AppointmentSlot) => {
+    console.log("Booking appointment with link:", appointment.link);
+    setPendingAppointmentMeta({
+      teacher: appointment.counselorName,
+    });
+    setBookingUrl(appointment.link);
     setIsLoading(true);
     setShowAppointmentForm(false);
   };
@@ -138,8 +164,8 @@ const Guidance = () => {
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
-          }
-        )}.`
+          },
+        )}.`,
       );
       // Refresh the guidance data to show updated availability
       setTimeout(() => {
@@ -151,6 +177,7 @@ const Guidance = () => {
     setBookingUrl(null);
     setIsLoading(false);
     setShowAppointmentForm(false);
+    setPendingAppointmentMeta(null);
 
     // Clear booking result after 3 seconds
     setTimeout(() => {
@@ -164,6 +191,7 @@ const Guidance = () => {
     setBookingUrl(null);
     setIsLoading(false);
     setShowAppointmentForm(false);
+    setPendingAppointmentMeta(null);
 
     // Clear booking result after 3 seconds
     setTimeout(() => {
@@ -174,6 +202,10 @@ const Guidance = () => {
   // Handle form submission
   const handleFormSubmit = (formData: AppointmentFormData) => {
     console.log("Submitting form data:", formData);
+    setPendingAppointmentMeta((current) => ({
+      teacher: current?.teacher,
+      subject: formData.reasonLabel ?? current?.subject,
+    }));
     setFormSubmissionData(formData);
     setShowAppointmentForm(false);
     setIsLoading(true);
@@ -184,6 +216,7 @@ const Guidance = () => {
     setShowAppointmentForm(false);
     setAppointmentFormHtml("");
     setBookingResult("Appointment booking cancelled.");
+    setPendingAppointmentMeta(null);
 
     // Clear result after 2 seconds
     setTimeout(() => {
@@ -211,8 +244,8 @@ const Guidance = () => {
             day: "2-digit",
             month: "2-digit",
             year: "numeric",
-          }
-        )}.`
+          },
+        )}.`,
       );
       // Refresh the guidance data to show updated availability
       setTimeout(() => {
@@ -223,6 +256,7 @@ const Guidance = () => {
     setBookingResult(result);
     setFormSubmissionData(null);
     setIsLoading(false);
+    setPendingAppointmentMeta(null);
 
     // Clear booking result after 3 seconds
     setTimeout(() => {
@@ -235,6 +269,7 @@ const Guidance = () => {
     setBookingResult(`Form submission error: ${error}`);
     setFormSubmissionData(null);
     setIsLoading(false);
+    setPendingAppointmentMeta(null);
 
     // Clear booking result after 3 seconds
     setTimeout(() => {
@@ -291,17 +326,23 @@ const Guidance = () => {
             showsVerticalScrollIndicator={false}
           >
             <View className="flex items-center">
-              <Image
-                source={require("../../assets/images/checkmark.png")}
-                className={` w-30 h-30 my-3`}
-                style={{
-                  tintColor: bookingResult.includes("successfully")
-                    ? "#43a25a"
-                    : bookingResult.includes("cancelled")
-                      ? "#fcc245"
-                      : "#d6363f",
-                }}
-              />
+              {bookingResult.includes("cancelled") ? (
+                <Image
+                  source={require("../../assets/images/caution.png")}
+                  className={` w-20 h-20 my-3 mb-5`}
+                  style={{
+                    tintColor: "#fcc245",
+                  }}
+                />
+              ) : (
+                <Image
+                  source={require("../../assets/images/checkmark.png")}
+                  className={` w-30 h-30 my-3`}
+                  style={{
+                    tintColor: "#43a25a",
+                  }}
+                />
+              )}
               <Text
                 className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-xl font-semibold`}
               >
@@ -496,7 +537,7 @@ const Guidance = () => {
           <TouchableOpacity
             onPress={() => {
               router.push("/AppointmentsPage");
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
             }}
             disabled={isLoading}
           >
@@ -542,7 +583,7 @@ const Guidance = () => {
           <TouchableOpacity
             onPress={() => {
               setShowDatePicker(true);
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
             }}
             disabled={isLoading}
             className={`flex-1 mr-2`}
@@ -556,7 +597,7 @@ const Guidance = () => {
           <TouchableOpacity
             onPress={() => {
               checkGuidanceAvailability();
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
             }}
             disabled={isLoading}
           >
@@ -584,6 +625,7 @@ const Guidance = () => {
       {bookingUrl && (
         <TeachAssistAuthFetcher
           bookAppointment={bookingUrl}
+          appointmentMeta={pendingAppointmentMeta ?? undefined}
           onResult={handleBookingResult}
           onError={handleBookingError}
           onLoadingChange={setIsLoading}
@@ -592,6 +634,7 @@ const Guidance = () => {
       {formSubmissionData && (
         <TeachAssistAuthFetcher
           submitAppointmentForm={formSubmissionData}
+          appointmentMeta={pendingAppointmentMeta ?? undefined}
           onResult={handleFormSubmissionResult}
           onError={handleFormSubmissionError}
           onLoadingChange={setIsLoading}

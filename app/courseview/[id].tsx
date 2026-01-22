@@ -1,20 +1,21 @@
-import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
   Modal,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { Dropdown } from "react-native-element-dropdown";
 import { BarChart, LineChart } from "react-native-gifted-charts";
 import AnimatedProgressWheel from "react-native-progress-wheel";
-import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
+import { SecureStorage } from "../(auth)/taauth";
 import BackButton from "../(components)/Back";
 import {
   getCategoryFullName,
@@ -24,10 +25,12 @@ import {
   type ParsedCourseData,
 } from "../(components)/GradeParser";
 import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact } from "../(utils)/haptics";
+
+type CategoryKey = "K" | "T" | "C" | "A" | "O";
 
 const CourseViewScreen = () => {
   // no check for internet needed b/c cached from first view and course page blocks refresh that clears this
-  const router = useRouter();
   const { isDark } = useTheme();
   const { id } = useLocalSearchParams();
   const subjectID = id ? parseInt(id as string, 10) : null;
@@ -35,26 +38,42 @@ const CourseViewScreen = () => {
   const [courseData, setCourseData] = useState<ParsedCourseData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("Loading...");
-  const [userName, setUserName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"courses" | "analytics">(
-    "courses"
+    "courses",
   );
   const [expandedAssignments, setExpandedAssignments] = useState<Set<number>>(
-    new Set()
+    new Set(),
   );
-  const [courseUrl, setCourseUrl] = useState<string | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [showAddAssignment, setShowAddAssignment] = useState(false);
   const [showAssignmentModal, setShowAssignmentModal] = useState(false);
   const [editingAssignmentIndex, setEditingAssignmentIndex] = useState<
     number | null
   >(null);
+  const [selectedCategoryKey, setSelectedCategoryKey] =
+    useState<CategoryKey>("K");
+  const [selectedOverallValue, setSelectedOverallValue] = useState<
+    number | null
+  >(null);
+  const [selectedCategoryValue, setSelectedCategoryValue] = useState<
+    number | null
+  >(null);
+
+  useEffect(() => {
+    setSelectedCategoryValue(null);
+  }, [selectedCategoryKey]);
 
   const getUser = async () => {
-    const userName = await SecureStorage.load("ta_username");
-    setUserName(userName);
-    return userName;
+    return await SecureStorage.load("ta_username");
   };
+
+  const parseWeightingValue = (value?: string) => {
+    const parsed = parseFloat((value ?? "").replace("%", ""));
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const formatWeightingValue = (value: number) =>
+    `${value.toFixed(1).replace(/\.0$/, "")}%`;
 
   const calculateWeightedMark = (categories: any): number => {
     let totalWeightedScore = 0;
@@ -96,7 +115,7 @@ const CourseViewScreen = () => {
 
     const weightings = courseData.summary.courseWeightings;
     const gradedAssignments = courseData.assignments.filter(
-      (assignment) => !assignment.formative
+      (assignment) => !assignment.formative,
     );
 
     if (gradedAssignments.length === 0) {
@@ -138,12 +157,15 @@ const CourseViewScreen = () => {
     });
 
     // Step 2 & 3: Apply course weightings to calculate the final mark
+    const otherWeight =
+      parseWeightingValue(weightings.other) +
+      parseWeightingValue(weightings.final);
     const courseWeightMap = {
-      K: parseFloat(weightings.knowledge.replace("%", "")) || 0,
-      T: parseFloat(weightings.thinking.replace("%", "")) || 0,
-      C: parseFloat(weightings.communication.replace("%", "")) || 0,
-      A: parseFloat(weightings.application.replace("%", "")) || 0,
-      O: parseFloat(weightings.other.replace("%", "")) || 0,
+      K: parseWeightingValue(weightings.knowledge),
+      T: parseWeightingValue(weightings.thinking),
+      C: parseWeightingValue(weightings.communication),
+      A: parseWeightingValue(weightings.application),
+      O: otherWeight,
     };
 
     let totalWeightedAchievement = 0;
@@ -217,7 +239,7 @@ const CourseViewScreen = () => {
     if (!courseData) return;
 
     const updatedAssignments = courseData.assignments.filter(
-      (_, i) => i !== index
+      (_, i) => i !== index,
     );
     setCourseData({
       ...courseData,
@@ -239,90 +261,7 @@ const CourseViewScreen = () => {
     setExpandedAssignments(updatedExpanded);
   };
 
-  const onFetchResult = async (result: string) => {
-    // Check for no internet connection
-    const networkState = await NetInfo.fetch();
-    if (networkState.isConnected === false) {
-      setMessage("No internet connection. Check your network and try again.");
-      setIsLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
-    if (result.includes("Login Failed")) {
-      setMessage("Session expired. Please log in again.");
-      setTimeout(() => router.replace("/signin"), 2000);
-    } else if (
-      result
-        .toLowerCase()
-        .includes("have reports that are available for viewing")
-    ) {
-      setMessage(
-        "Course data has been recently updated. Please refresh to see the latest information."
-      );
-      setIsLoading(false);
-    } else if (result.length < 200) {
-      // something is wrong
-      setMessage("Received incomplete data. Please try again.");
-      setIsLoading(false);
-    } else {
-      // normal
-      const parsedData = parseGradeData(result);
-      setCourseData(parsedData);
-      setIsLoading(false);
-
-      if (parsedData.success) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setMessage(`Freshly Retrieved ${new Date().toLocaleTimeString()}`);
-
-        // cache html
-        if (subjectID) {
-          SecureStorage.save(`course_${subjectID}`, result);
-        }
-      } else {
-        setMessage(`Error parsing course data: ${parsedData.error}`);
-      }
-    }
-  };
-
-  const onError = async (error: string) => {
-    // Check for no internet
-    const networkState = await NetInfo.fetch();
-    if (networkState.isConnected === false) {
-      setMessage("No internet connection. Check your network and try again.");
-      setIsLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      return;
-    }
-    setMessage(`Error: ${error}`);
-    setTimeout(() => router.replace("/signin"), 2000);
-  };
-
-  const onLoadingChange = (loading: boolean) => {
-    setIsLoading(loading);
-  };
-
-  // make the url to send
-  const buildCourseUrl = async (subjectId: number): Promise<string | null> => {
-    try {
-      const savedStudentId = await SecureStorage.load("ta_student_id");
-      const savedSchoolId = await SecureStorage.load("school_id");
-
-      if (!savedStudentId || !savedSchoolId) {
-        console.error("Missing student ID or school ID");
-        return null;
-      }
-
-      const url = `https://ta.yrdsb.ca/live/students/viewReport.php?subject_id=${subjectId}&student_id=${savedStudentId}&school_id=${savedSchoolId}`;
-      return url;
-    } catch (error) {
-      console.error("Error building course URL:", error);
-      return null;
-    }
-  };
-
   // Types for assignment modal
-  type CategoryKey = "K" | "T" | "C" | "A" | "O";
-
   interface CategoryState {
     percentage: string;
     weight: string;
@@ -344,10 +283,10 @@ const CourseViewScreen = () => {
     initialData?: any;
   }) => {
     const [assignmentName, setAssignmentName] = useState(
-      initialData?.name || ""
+      initialData?.name || "",
     );
     const [isFormative, setIsFormative] = useState(
-      initialData?.formative || false
+      initialData?.formative || false,
     );
     const [categories, setCategories] = useState<CategoriesState>({
       K: initialData?.categories.K
@@ -405,7 +344,7 @@ const CourseViewScreen = () => {
           } else {
             finalCategories[key] = null;
           }
-        }
+        },
       );
 
       onSave({
@@ -472,7 +411,7 @@ const CourseViewScreen = () => {
                   <TouchableOpacity
                     className={`w-12 h-6 rounded-full ${isFormative ? "bg-baccent" : isDark ? "bg-dark4" : "bg-light4"} flex-row items-center`}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                       setIsFormative(!isFormative);
                     }}
                   >
@@ -504,8 +443,8 @@ const CourseViewScreen = () => {
                       <TouchableOpacity
                         className={`w-8 h-8 rounded ${value.enabled ? "bg-baccent" : isDark ? "bg-dark4" : "bg-light4"} items-center justify-center`}
                         onPress={() => {
-                          Haptics.impactAsync(
-                            Haptics.ImpactFeedbackStyle.Medium
+                          hapticsImpact(
+                            Haptics.ImpactFeedbackStyle.Medium,
                           );
                           setCategories((prev) => ({
                             ...prev,
@@ -548,7 +487,7 @@ const CourseViewScreen = () => {
                                     ...prev[key],
                                     percentage: Math.max(
                                       0,
-                                      Math.min(100, num)
+                                      Math.min(100, num),
                                     ).toString(),
                                   },
                                 }));
@@ -611,7 +550,7 @@ const CourseViewScreen = () => {
                 className={`flex-1 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-3`}
                 onPress={() => {
                   onClose();
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                 }}
               >
                 <Text
@@ -624,7 +563,7 @@ const CourseViewScreen = () => {
                 className="flex-1 bg-baccent rounded-lg p-3"
                 onPress={() => {
                   handleSave();
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                 }}
               >
                 <Text className="text-white text-center font-medium">
@@ -659,7 +598,8 @@ const CourseViewScreen = () => {
                   weight: "20",
                 },
               },
-              feedback: "feedback",
+              feedback:
+                "This is a pretty skibidi quest. You did really well. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum cursus eleifend. Aliquam eleifend eleifend nunc, sit amet interdum dui fringilla in. ",
             },
             {
               name: "Research Report: What Was The Dog Doing?",
@@ -676,7 +616,7 @@ const CourseViewScreen = () => {
               },
             },
             {
-              name: "Unit 3: Addition and Subtraction",
+              name: "Macbeth In-Class Essay",
               categories: {
                 K: {
                   score: "7 / 8",
@@ -700,6 +640,7 @@ const CourseViewScreen = () => {
                 },
                 O: null,
               },
+              formative: true,
             },
             {
               name: "Research Conference",
@@ -810,7 +751,7 @@ const CourseViewScreen = () => {
               final: "30%",
             },
           },
-          courseName: "Intro to Mathematics",
+          courseName: "English (ENG2D1)",
           success: true,
         });
         setIsLoading(false);
@@ -821,6 +762,25 @@ const CourseViewScreen = () => {
       // reg users
       if (subjectID === null) {
         setMessage("Error: No course ID provided.");
+        setCourseData({
+          assignments: [],
+          summary: {
+            term: null,
+            course: null,
+            categories: [],
+            courseWeightings: {
+              knowledge: "0%",
+              thinking: "0%",
+              communication: "0%",
+              application: "0%",
+              other: "0%",
+              final: "0%",
+            },
+          },
+          courseName: "Course",
+          success: false,
+          error: "Missing course ID.",
+        });
         setIsLoading(false);
         return;
       }
@@ -829,10 +789,16 @@ const CourseViewScreen = () => {
       const cachedHtml = await SecureStorage.load(`course_${subjectID}`);
 
       // see if its html
+      const isCourseReportHtml =
+        cachedHtml &&
+        (cachedHtml.includes("Assignment</th>") ||
+          cachedHtml.includes("Course Weighting") ||
+          cachedHtml.includes("Student Achievement"));
       const isValidHtml =
         cachedHtml &&
         cachedHtml.includes("<html") &&
-        cachedHtml.includes("</html>");
+        cachedHtml.includes("</html>") &&
+        isCourseReportHtml;
 
       if (isValidHtml) {
         console.log("Found valid cached HTML, parsing...");
@@ -854,34 +820,38 @@ const CourseViewScreen = () => {
 
       // no good cached data
       // TODO: fix
-      if (!isValidHtml) {
-        setMessage(`Fetching course data from server...`);
+      if (cachedHtml && !isValidHtml && subjectID) {
+        await SecureStorage.delete(`course_${subjectID}`);
+      }
 
-        // make url
-        const url = await buildCourseUrl(subjectID);
-        if (url) {
-          setCourseUrl(url);
-          setIsLoading(true);
-        } else {
-          setMessage(
-            "Error: Could not build course URL. Please try logging in again."
-          );
-          setIsLoading(false);
-        }
+      if (!isValidHtml) {
+        setCourseData({
+          assignments: [],
+          summary: {
+            term: null,
+            course: null,
+            categories: [],
+            courseWeightings: {
+              knowledge: "0%",
+              thinking: "0%",
+              communication: "0%",
+              application: "0%",
+              other: "0%",
+              final: "0%",
+            },
+          },
+          courseName: "Course",
+          success: false,
+          error:
+            "Course data isn't synced yet. Refresh your courses to fetch it.",
+        });
+        setMessage("Course data isn't synced yet. Refresh courses to load.");
+        setIsLoading(false);
       }
     };
 
     loadCourseData();
   }, [subjectID]);
-
-  // choose if we need to render the fetcher component
-  // only fetch if we have a real user (not test user), no course data, and a course URL to fetch
-  const shouldFetch =
-    courseUrl &&
-    !courseData &&
-    isLoading &&
-    userName &&
-    !userName.includes("123456789");
 
   const renderTabButton = (tab: "courses" | "analytics", label: string) => (
     <TouchableOpacity
@@ -895,7 +865,7 @@ const CourseViewScreen = () => {
             : "bg-light3"
       }`}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
         setActiveTab(tab);
       }}
     >
@@ -920,7 +890,7 @@ const CourseViewScreen = () => {
             key={index}
             className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-5 mb-4 shadow-lg`}
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
               toggleAssignmentExpansion(index);
             }}
             activeOpacity={1}
@@ -946,7 +916,7 @@ const CourseViewScreen = () => {
                     <Text
                       className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
                     >
-                      Teacher Feedback
+                      Feedback
                     </Text>
                   )}
                 </View>
@@ -956,10 +926,10 @@ const CourseViewScreen = () => {
                   {assignment.name}
                 </Text>
                 <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm font-light`}
+                  className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm`}
                 >
                   {getPerformanceText(
-                    calculateWeightedMark(assignment.categories)
+                    calculateWeightedMark(assignment.categories),
                   )}
                 </Text>
               </View>
@@ -1042,12 +1012,12 @@ const CourseViewScreen = () => {
                         >
                           <View
                             className={`h-full rounded-full ${getProgressColor(
-                              parseInt(value.percentage.replace("%", ""))
+                              parseInt(value.percentage.replace("%", "")),
                             )}`}
                             style={{
                               width: `${Math.min(
                                 parseInt(value.percentage.replace("%", "")),
-                                100
+                                100,
                               )}%`,
                             }}
                           />
@@ -1070,7 +1040,7 @@ const CourseViewScreen = () => {
                           </Text>
                         </View>
                       </View>
-                    ) : null
+                    ) : null,
                   )}
                   {assignment.feedback !== undefined && (
                     <View
@@ -1098,11 +1068,11 @@ const CourseViewScreen = () => {
                     >
                       {
                         Object.values(assignment.categories).filter(
-                          (cat) => cat !== null
+                          (cat) => cat !== null,
                         ).length
                       }{" "}
                       {Object.values(assignment.categories).filter(
-                        (cat) => cat !== null
+                        (cat) => cat !== null,
                       ).length === 1
                         ? "category"
                         : "categories"}{" "}
@@ -1116,8 +1086,8 @@ const CourseViewScreen = () => {
                       <TouchableOpacity
                         className={`flex-1 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-3 flex-row items-center justify-center gap-2`}
                         onPress={() => {
-                          Haptics.impactAsync(
-                            Haptics.ImpactFeedbackStyle.Medium
+                          hapticsImpact(
+                            Haptics.ImpactFeedbackStyle.Medium,
                           );
                           setEditingAssignmentIndex(index);
                         }}
@@ -1136,8 +1106,8 @@ const CourseViewScreen = () => {
                       <TouchableOpacity
                         className="flex-1 bg-danger/20 rounded-lg p-3 flex-row items-center justify-center gap-2"
                         onPress={() => {
-                          Haptics.impactAsync(
-                            Haptics.ImpactFeedbackStyle.Heavy
+                          hapticsImpact(
+                            Haptics.ImpactFeedbackStyle.Heavy,
                           );
                           deleteAssignment(index);
                         }}
@@ -1203,10 +1173,48 @@ const CourseViewScreen = () => {
       );
     }
 
+    const getChartRange = (values: number[]) => {
+      if (values.length === 0) {
+        return { min: 0, max: 100 };
+      }
+
+      const minValue = Math.min(...values);
+      const maxValue = Math.max(...values);
+      const spread = maxValue - minValue;
+      const padding = Math.max(3, spread * 0.2);
+
+      let min = Math.floor(minValue - padding);
+      let max = Math.ceil(maxValue + padding);
+
+      if (max - min < 10) {
+        const mid = (minValue + maxValue) / 2;
+        min = Math.floor(mid - 5);
+        max = Math.ceil(mid + 5);
+      }
+
+      return {
+        min: Math.max(0, min),
+        max: Math.min(100, max),
+      };
+    };
+
+    const getAxisConfig = (values: number[]) => {
+      const range = getChartRange(values);
+      const yAxisOffset = Number.isFinite(range.min)
+        ? Math.max(0, Math.floor(range.min))
+        : 0;
+      const top = Number.isFinite(range.max)
+        ? Math.min(100, Math.ceil(range.max))
+        : 100;
+      const maxValue = Math.max(1, top - yAxisOffset);
+
+      return { yAxisOffset, maxValue };
+    };
+
     // function to get the average based on a subset of assignments
     const calculateProgressiveCourseAverage = (
       assignments: any[],
-      weightings: any
+      weightings: any,
     ) => {
       if (assignments.length === 0) return 0;
 
@@ -1231,7 +1239,7 @@ const CourseViewScreen = () => {
                 categoryTotals[key].totalWeight += weight;
               }
             }
-          }
+          },
         );
       });
 
@@ -1244,13 +1252,35 @@ const CourseViewScreen = () => {
         }
       });
 
-      const courseWeightMap = {
-        K: parseFloat(weightings.knowledge.replace("%", "")) || 0,
-        T: parseFloat(weightings.thinking.replace("%", "")) || 0,
-        C: parseFloat(weightings.communication.replace("%", "")) || 0,
-        A: parseFloat(weightings.application.replace("%", "")) || 0,
-        O: parseFloat(weightings.other.replace("%", "")) || 0,
+      const safeWeightings = weightings ?? {
+        knowledge: "0%",
+        thinking: "0%",
+        communication: "0%",
+        application: "0%",
+        other: "0%",
+        final: "0%",
       };
+
+      const otherWeight =
+        parseWeightingValue(safeWeightings.other) +
+        parseWeightingValue(safeWeightings.final);
+      const courseWeightMap = {
+        K: parseWeightingValue(safeWeightings.knowledge),
+        T: parseWeightingValue(safeWeightings.thinking),
+        C: parseWeightingValue(safeWeightings.communication),
+        A: parseWeightingValue(safeWeightings.application),
+        O: otherWeight,
+      };
+
+      const hasCourseWeightings = Object.values(courseWeightMap).some(
+        (value) => value > 0,
+      );
+      if (!hasCourseWeightings) {
+        const values = Object.values(categoryAchievements);
+        if (values.length === 0) return 0;
+        const sum = values.reduce((total, value) => total + value, 0);
+        return sum / values.length;
+      }
       let totalWeightedAchievement = 0;
       let totalAssessedWeight = 0;
       Object.entries(categoryAchievements).forEach(([key, achievement]) => {
@@ -1269,11 +1299,11 @@ const CourseViewScreen = () => {
     const overallLineData = chronologicalAssignments.map((_, index) => {
       const assignmentsUpToThisPoint = chronologicalAssignments.slice(
         0,
-        index + 1
+        index + 1,
       );
       const cumulativeAverage = calculateProgressiveCourseAverage(
         assignmentsUpToThisPoint,
-        courseData?.summary.courseWeightings
+        courseData?.summary.courseWeightings,
       );
       return {
         value: cumulativeAverage,
@@ -1281,6 +1311,18 @@ const CourseViewScreen = () => {
         labelTextStyle: { color: isDark ? "#edebea" : "#2f3035", fontSize: 10 },
       };
     });
+    const overallAxisConfig = getAxisConfig(
+      overallLineData.map((point) => point.value),
+    );
+    const overallFinalValue =
+      overallLineData[overallLineData.length - 1]?.value ?? 0;
+    const overallFinalChartValue = Number.isFinite(overallFinalValue)
+      ? overallFinalValue - overallAxisConfig.yAxisOffset
+      : 0;
+    const overallValueAdjustment =
+      Number.isFinite(courseAverage) && Number.isFinite(overallFinalValue)
+        ? courseAverage - overallFinalValue
+        : 0;
 
     // Calculate progressive data for category-specific line charts
     const getCategoryLineData = (categoryKey: CategoryKey) => {
@@ -1300,7 +1342,7 @@ const CourseViewScreen = () => {
           parseFloat(categoryData.weight) > 0
         ) {
           const percentage = parseFloat(
-            categoryData.percentage.replace("%", "")
+            categoryData.percentage.replace("%", ""),
           );
           const weight = parseFloat(categoryData.weight);
           if (!isNaN(percentage) && !isNaN(weight)) {
@@ -1334,15 +1376,38 @@ const CourseViewScreen = () => {
         label: `${index + 1}`,
         frontColor: "#27b1fa",
         gradientColor: "#2faf7f",
-      })
+      }),
     );
 
-    const categories = [
+    const categories: { key: CategoryKey; name: string; color: string }[] = [
       { key: "K", name: "Knowledge/Understanding", color: "#27b1fa" },
       { key: "T", name: "Thinking", color: "#2faf7f" },
       { key: "C", name: "Communication", color: "#f59e0b" },
       { key: "A", name: "Application", color: "#ef4444" },
+      { key: "O", name: "Other/Culminating", color: "#6b7280" },
     ];
+    const categoryOptions = categories.map((category) => ({
+      label: category.name,
+      value: category.key,
+    }));
+
+    const selectedCategory =
+      categories.find((category) => category.key === selectedCategoryKey) ??
+      categories[0];
+    const selectedCategoryData = getCategoryLineData(selectedCategory.key);
+    const selectedCategoryAxisConfig = getAxisConfig(
+      selectedCategoryData.map((point) => point.value),
+    );
+    const formatSelectedValue = (
+      value: number | null,
+      adjustment: number = 0,
+    ) => {
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        return "";
+      }
+      const adjustedValue = overallFinalValue - overallFinalChartValue;
+      return `${Math.min(adjustedValue + value, 100).toFixed(1)}%`;
+    };
 
     return (
       <View className={`w-full`}>
@@ -1356,107 +1421,203 @@ const CourseViewScreen = () => {
             >
               Grade Progression
             </Text>
+            <Text className={`text-baccent font-bold text-lg`}>
+              {formatSelectedValue(
+                selectedOverallValue,
+                overallValueAdjustment,
+              )}
+            </Text>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className={`flex-1 pb-3 pr-4`}>
-              <LineChart
-                data={overallLineData}
-                isAnimated
-                focusEnabled
-                showStripOnFocus
-                showTextOnFocus
-                height={180}
-                color="#27b1fa"
-                thickness={3}
-                startFillColor="#27b1fa"
-                endFillColor="#2faf7f"
-                startOpacity={0.3}
-                endOpacity={0.1}
-                curved
-                dataPointsColor="#27b1fa"
-                dataPointsRadius={5}
-                hideDataPoints={false}
-                textColor="#edebea"
-                textFontSize={10}
-                yAxisTextStyle={{
-                  color: `${isDark ? "#edebea" : "#2f3035"}`,
-                  fontSize: 11,
-                }}
-                xAxisLabelsHeight={0}
-                rulesColor="#4a5568"
-                rulesType="solid"
-                yAxisLabelSuffix="%"
-                maxValue={100}
-                noOfSections={4}
-                hideRules={true}
-                xAxisThickness={0}
-                yAxisThickness={0}
-                formatYLabel={(value) => `${Math.round(Number(value))}`}
-              />
-            </View>
-          </ScrollView>
+          <View className={`flex-1 pb-3 pr-2`}>
+            <LineChart
+              data={overallLineData}
+              isAnimated
+              focusEnabled
+              scrollAnimation={true}
+              onFocus={(item: { value?: number }) => {
+                if (typeof item?.value === "number") {
+                  setSelectedOverallValue(item.value);
+                }
+              }}
+              height={180}
+              color="#27b1fa"
+              thickness={3}
+              startFillColor="#27b1fa"
+              endFillColor="#2faf7f"
+              startOpacity={0.3}
+              endOpacity={0.1}
+              curved
+              maxValue={overallAxisConfig.maxValue}
+              yAxisOffset={overallAxisConfig.yAxisOffset}
+              dataPointsColor="#27b1fa"
+              dataPointsRadius={5}
+              hideDataPoints={false}
+              textColor="#edebea"
+              textFontSize={10}
+              yAxisTextStyle={{
+                color: `${isDark ? "#edebea" : "#2f3035"}`,
+                fontSize: 11,
+              }}
+              stripOpacity={0.4}
+              xAxisLabelsHeight={0}
+              rulesColor="#4a5568"
+              rulesType="solid"
+              yAxisLabelSuffix="%"
+              noOfSections={4}
+              hideRules={true}
+              xAxisThickness={0}
+              yAxisThickness={0}
+              showStripOnFocus
+              unFocusOnPressOut={false}
+              focusedDataPointColor="#27b1fa"
+              focusedDataPointRadius={6}
+              formatYLabel={(value) => `${Math.round(Number(value))}`}
+            />
+          </View>
         </View>
 
         {/* learning cats */}
-        <Text
-          className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-1`}
-        >
-          Learning Categories
-        </Text>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          className={`mb-6`}
-        >
-          <View className={`flex-row`}>
-            {categories.map((category) => {
-              const categoryData = getCategoryLineData(
-                category.key as CategoryKey
-              );
-              if (categoryData.length === 0) return null;
+        <View className="mb-6">
+          <View className="flex-row items-center justify-between mb-4">
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+            >
+              Learning Categories
+            </Text>
 
-              return (
-                <View
-                  key={category.key}
-                  className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 mr-4 pb-7`}
-                  style={{ width: 280 }}
-                >
-                  <Text
-                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-bold mb-3`}
-                  >
-                    {category.name}
-                  </Text>
-                  <LineChart
-                    data={categoryData}
-                    isAnimated
-                    width={240}
-                    height={150}
-                    spacing={categoryData.length > 4 ? 45 : 55}
-                    initialSpacing={15}
-                    endSpacing={15}
-                    color={category.color}
-                    thickness={3}
-                    curved
-                    dataPointsColor={category.color}
-                    dataPointsRadius={4}
-                    yAxisTextStyle={{
-                      color: `${isDark ? "#edebea" : "#2f3035"}`,
-                      fontSize: 11,
-                    }}
-                    xAxisLabelsHeight={0}
-                    yAxisLabelSuffix="%"
-                    maxValue={100}
-                    noOfSections={4}
-                    hideRules
-                    xAxisThickness={0}
-                    yAxisThickness={0}
-                    formatYLabel={(value) => `${Math.round(Number(value))}`}
-                  />
-                </View>
-              );
-            })}
+            <View style={{ minWidth: 170 }}>
+              <Dropdown
+                style={[
+                  styles.dropdown,
+                  isDark ? styles.dropdownDark : styles.dropdownLight,
+                ]}
+                onFocus={() => {
+                  // dropdown opened
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Soft);
+                  console.log("Dropdown opened");
+                }}
+                data={categoryOptions}
+                labelField="label"
+                valueField="value"
+                placeholder="Select item"
+                value={selectedCategoryKey}
+                placeholderStyle={
+                  isDark ? styles.dropdownTextDark : styles.dropdownTextLight
+                }
+                selectedTextStyle={
+                  isDark ? styles.dropdownTextDark : styles.dropdownTextLight
+                }
+                itemTextStyle={
+                  isDark ? styles.dropdownItemDark : styles.dropdownItemLight
+                }
+                containerStyle={
+                  isDark ? styles.dropdownMenuDark : styles.dropdownMenuLight
+                }
+                activeColor="#27b1fa85"
+                renderItem={(item, selected) => {
+                  return (
+                    <View
+                      style={{
+                        flex: 1,
+                        margin: 7,
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text
+                        style={[
+                          isDark
+                            ? styles.dropdownItemDark
+                            : styles.dropdownItemLight,
+                          { lineHeight: 16 },
+                        ]}
+                      >
+                        {item.label}
+                      </Text>
+                    </View>
+                  );
+                }}
+                itemContainerStyle={
+                  isDark ? styles.dropdownMenuDark : styles.dropdownMenuLight
+                }
+                onChange={(item: { value: CategoryKey }) => {
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                  setSelectedCategoryKey(item.value);
+                }}
+              />
+            </View>
           </View>
-        </ScrollView>
+
+          {selectedCategoryData.length === 0 ? (
+            <View
+              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6`}
+            >
+              <Text
+                className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center text-sm`}
+              >
+                No data yet for this category.
+              </Text>
+            </View>
+          ) : (
+            <View
+              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 pb-7`}
+            >
+              <View className="flex-row justify-between items-center mb-4">
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+                >
+                  {selectedCategory.name}
+                </Text>
+                <Text
+                  style={{ color: selectedCategory.color }}
+                  className={`font-[${selectedCategory.color} font-bold text-xl`}
+                >
+                  {formatSelectedValue(selectedCategoryValue)}
+                </Text>
+              </View>
+              <View className="pr-2">
+                <LineChart
+                  data={selectedCategoryData}
+                  isAnimated
+                  scrollAnimation={true}
+                  height={150}
+                  spacing={selectedCategoryData.length > 4 ? 45 : 55}
+                  initialSpacing={15}
+                  endSpacing={15}
+                  color={selectedCategory.color}
+                  thickness={3}
+                  curved
+                  focusEnabled
+                  onFocus={(item: { value?: number }) => {
+                    if (typeof item?.value === "number") {
+                      setSelectedCategoryValue(item.value);
+                    }
+                  }}
+                  showStripOnFocus
+                  showTextOnFocus={false}
+                  dataPointsColor={selectedCategory.color}
+                  dataPointsRadius={4}
+                  yAxisTextStyle={{
+                    color: `${isDark ? "#edebea" : "#2f3035"}`,
+                    fontSize: 11,
+                  }}
+                  xAxisLabelsHeight={0}
+                  yAxisLabelSuffix="%"
+                  maxValue={selectedCategoryAxisConfig.maxValue}
+                  yAxisOffset={selectedCategoryAxisConfig.yAxisOffset}
+                  stripOpacity={0.4}
+                  noOfSections={4}
+                  hideRules
+                  xAxisThickness={0}
+                  yAxisThickness={0}
+                  formatYLabel={(value) => `${Math.round(Number(value))}`}
+                  unFocusOnPressOut={false}
+                  focusedDataPointColor={selectedCategory.color}
+                  focusedDataPointRadius={6}
+                />
+              </View>
+            </View>
+          )}
+        </View>
 
         {/* assignment overview here */}
         <View
@@ -1467,45 +1628,43 @@ const CourseViewScreen = () => {
           >
             Assignment Overview
           </Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className={`mr-4 flex items-center justify-center`}>
-              <BarChart
-                data={assignmentData}
-                isAnimated
-                height={230}
-                barWidth={30}
-                spacing={12}
-                roundedTop
-                hideRules={true}
-                disableScroll={true}
-                xAxisThickness={0}
-                yAxisThickness={0}
-                xAxisColor="#292929"
-                yAxisColor="#292929"
-                yAxisTextStyle={{
-                  color: `${isDark ? "#edebea" : "#2f3035"}`,
-                  fontSize: 11,
-                }}
-                topLabelTextStyle={{
-                  color: `${isDark ? "#2f3035" : "#edebea"}`,
-                  fontSize: 13,
-                  fontWeight: "700",
-                }}
-                showValuesAsTopLabel
-                topLabelContainerStyle={{
-                  marginTop: 20,
-                }}
-                xAxisLabelTextStyle={{ color: "transparent" }}
-                noOfSections={4}
-                maxValue={100}
-                yAxisLabelSuffix="%"
-                animationDuration={1000}
-                initialSpacing={15}
-                endSpacing={15}
-                formatYLabel={(value) => `${Math.round(Number(value))}`}
-              />
-            </View>
-          </ScrollView>
+          <View className={`mr-4 flex items-center justify-center`}>
+            <BarChart
+              data={assignmentData}
+              isAnimated
+              scrollAnimation={true}
+              height={230}
+              barWidth={30}
+              spacing={12}
+              roundedTop
+              hideRules={true}
+              xAxisThickness={0}
+              yAxisThickness={0}
+              xAxisColor="#292929"
+              yAxisColor="#292929"
+              yAxisTextStyle={{
+                color: `${isDark ? "#edebea" : "#2f3035"}`,
+                fontSize: 11,
+              }}
+              topLabelTextStyle={{
+                color: `${isDark ? "#2f3035" : "#edebea"}`,
+                fontSize: 13,
+                fontWeight: "700",
+              }}
+              showValuesAsTopLabel
+              topLabelContainerStyle={{
+                marginTop: 20,
+              }}
+              xAxisLabelTextStyle={{ color: "#ffffff00" }}
+              noOfSections={4}
+              maxValue={100}
+              yAxisLabelSuffix="%"
+              animationDuration={1000}
+              initialSpacing={15}
+              endSpacing={15}
+              formatYLabel={(value) => `${Math.round(Number(value))}`}
+            />
+          </View>
         </View>
 
         {/* random stuff */}
@@ -1526,8 +1685,8 @@ const CourseViewScreen = () => {
             <Text className={`text-success font-bold`}>
               {Math.max(
                 ...chronologicalAssignments.map(
-                  (a) => calculateWeightedMark(a.categories) || 0
-                )
+                  (a) => calculateWeightedMark(a.categories) || 0,
+                ),
               )}
               %
             </Text>
@@ -1541,8 +1700,8 @@ const CourseViewScreen = () => {
             <Text className={`text-danger font-bold`}>
               {Math.min(
                 ...chronologicalAssignments.map(
-                  (a) => calculateWeightedMark(a.categories) || 0
-                )
+                  (a) => calculateWeightedMark(a.categories) || 0,
+                ),
               )}
               %
             </Text>
@@ -1557,8 +1716,8 @@ const CourseViewScreen = () => {
               {Math.round(
                 chronologicalAssignments.reduce(
                   (sum, a) => sum + (calculateWeightedMark(a.categories) || 0),
-                  0
-                ) / chronologicalAssignments.length
+                  0,
+                ) / chronologicalAssignments.length,
               )}
               %
             </Text>
@@ -1638,7 +1797,7 @@ const CourseViewScreen = () => {
             <Text
               className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold`}
             >
-              {courseData?.summary?.courseWeightings?.final ?? ""}
+              {otherWeightingDisplay}
             </Text>
           </View>
         </View>
@@ -1652,6 +1811,12 @@ const CourseViewScreen = () => {
     );
   };
   const courseAverage = calculateCourseAverage();
+  const otherWeightingDisplay = courseData?.summary?.courseWeightings
+    ? formatWeightingValue(
+        parseWeightingValue(courseData.summary.courseWeightings.other) +
+          parseWeightingValue(courseData.summary.courseWeightings.final)
+      )
+    : "";
 
   return (
     <View className={`${isDark ? "bg-dark1" : "bg-light1"} flex-1`}>
@@ -1659,7 +1824,7 @@ const CourseViewScreen = () => {
       <TouchableOpacity
         className={`absolute top-15 right-5 flex flex-row items-center z-50 gap-2 ${isEditMode ? "bg-baccent" : `${isDark ? "bg-dark4" : "bg-light4"}`} rounded-lg p-2 shadow-md`}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           setIsEditMode(!isEditMode);
         }}
       >
@@ -1681,29 +1846,22 @@ const CourseViewScreen = () => {
       <ScrollView showsVerticalScrollIndicator={false}>
         <View className={`pt-20 px-5 pb-10 mt-13`}>
           <Text
-            className={`text-center ${isDark ? "text-appwhite" : "text-appblack"} text-4xl font-semibold`}
+            className={`text-center ${isDark ? "text-appwhite" : "text-appblack"} text-4xl font-semibold mb-3`}
           >
             {isLoading && !courseData
               ? "Loading..."
               : courseData?.courseName || "Course"}
           </Text>
+          {/* 
           <Text
             className={` text-center rounded-lg font-medium mb-5 ${isDark ? "text-appgraydark" : "text-appgraydark"}`}
           >
             {message}
-          </Text>
+          </Text>*/}
 
           {isLoading ? (
             <>
               <ActivityIndicator size="large" color="#27b1fa" />
-              {shouldFetch && (
-                <TeachAssistAuthFetcher
-                  fetchCourseUrl={courseUrl}
-                  onResult={onFetchResult}
-                  onError={onError}
-                  onLoadingChange={onLoadingChange}
-                />
-              )}
             </>
           ) : courseData && courseData.success ? (
             <View className={`w-full`}>
@@ -1712,6 +1870,7 @@ const CourseViewScreen = () => {
                 <View
                   className={`mb-6 flex-row justify-around ${isDark ? "bg-dark3" : "bg-light3"} shadow-lg p-3 pt-6 pb-5 rounded-xl`}
                 >
+                  {/* 
                   {courseData.summary.term && (
                     <View className={`items-center`}>
                       <View className="items-center justify-center relative">
@@ -1754,6 +1913,7 @@ const CourseViewScreen = () => {
                       </Text>
                     </View>
                   )}
+                  */}
                   <View className={``}>
                     <View className="items-center justify-center">
                       <AnimatedProgressWheel
@@ -1808,8 +1968,8 @@ const CourseViewScreen = () => {
                         className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 items-center`}
                         onPress={() => {
                           setShowAssignmentModal(true);
-                          Haptics.impactAsync(
-                            Haptics.ImpactFeedbackStyle.Medium
+                          hapticsImpact(
+                            Haptics.ImpactFeedbackStyle.Medium,
                           );
                         }}
                       >
@@ -1871,5 +2031,64 @@ const CourseViewScreen = () => {
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: "white",
+    padding: 16,
+    borderRadius: 8,
+  },
+  dropdown: {
+    height: 40,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+  },
+  dropdownDark: {
+    backgroundColor: "#232427",
+    borderRadius: 8,
+  },
+  dropdownLight: {
+    backgroundColor: "#e7e7e9",
+    borderRadius: 8,
+  },
+  dropdownTextDark: {
+    color: "#edebea",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 16,
+  },
+  dropdownTextLight: {
+    color: "#2f3035",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  dropdownItemDark: {
+    color: "#edebea",
+    fontSize: 13,
+    fontWeight: "600",
+    marginVertical: 3,
+    marginHorizontal: 2,
+    borderRadius: 8,
+  },
+  dropdownItemLight: {
+    color: "#2f3035",
+    fontSize: 13,
+    fontWeight: "600",
+    marginVertical: 3,
+    marginHorizontal: 2,
+    borderRadius: 8,
+  },
+  dropdownMenuDark: {
+    backgroundColor: "#232427",
+    padding: 1,
+    borderRadius: 8,
+    borderColor: "#232427",
+  },
+  dropdownMenuLight: {
+    backgroundColor: "#e7e7e9",
+    borderRadius: 8,
+  },
+});
 
 export default CourseViewScreen;

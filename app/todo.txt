@@ -15,4 +15,9 @@ clean up comments and code remove redundant stuff (never happening)
 
 i'm prob not adding ios support, 99 dollas is EXPENSIVE
 
+gurt: yo - curgot
+
+fixed overal/culminating bug
+fixed marks of 0 not showing
+
 

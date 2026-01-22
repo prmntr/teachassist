@@ -1,8 +1,9 @@
 import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, Text, TouchableOpacity, View} from "react-native";
+import { Alert, ScrollView, Text, TouchableOpacity, View } from "react-native";
+import { SecureStorage, type AppointmentFormData } from "../(auth)/taauth";
 import { useTheme } from "../contexts/ThemeContext";
-import { SecureStorage } from "../(auth)/taauth";
+import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 
 interface FormOption {
   id: string;
@@ -13,16 +14,8 @@ interface FormOption {
 
 interface AppointmentReasonFormProps {
   html: string;
-  onSubmit: (formData: FormSubmissionData) => void;
+  onSubmit: (formData: AppointmentFormData) => void;
   onCancel: () => void;
-}
-
-interface FormSubmissionData {
-  reason?: string;
-  reasonLabel?: string;
-  withParent?: boolean;
-  online?: boolean;
-  hiddenFields: Record<string, string>;
 }
 
 // some schools want their kids to give reasons for appts
@@ -108,15 +101,15 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
       return;
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
 
     // Find the selected option to get its label
     const selectedOption = formOptions.find(
-      (opt) => opt.value === selectedReason
+      (opt) => opt.value === selectedReason,
     );
     const reasonLabel = selectedOption?.label || selectedReason;
 
-    const formData: FormSubmissionData = {
+    const formData: AppointmentFormData = {
       reason: selectedReason,
       reasonLabel: reasonLabel, // acc text
       withParent,
@@ -128,12 +121,12 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
   };
 
   const handleReasonSelect = (value: string) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsImpact(Haptics.ImpactFeedbackStyle.Soft);
     setSelectedReason(value);
   };
 
   const handleCheckboxToggle = (type: "withParent" | "online") => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    hapticsImpact(Haptics.ImpactFeedbackStyle.Soft);
     if (type === "withParent") {
       setWithParent(!withParent);
     } else {
@@ -257,8 +250,8 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
           <View className={`flex-row gap-3`}>
             <TouchableOpacity
               onPress={() => {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success
+                hapticsNotification(
+                  Haptics.NotificationFeedbackType.Success,
                 );
                 onCancel();
               }}
@@ -271,8 +264,8 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
 
             <TouchableOpacity
               onPress={() => {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success
+                hapticsNotification(
+                  Haptics.NotificationFeedbackType.Success,
                 );
                 handleSubmit();
               }}
@@ -295,6 +288,7 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
             </TouchableOpacity>
           </View>
         </View>
+        <View className="my-3"></View>
       </ScrollView>
     </View>
   );

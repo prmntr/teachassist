@@ -1,14 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
+import { useFocusEffect } from "@react-navigation/native";
+import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   Image,
-  ImageBackground,
   Linking,
+  RefreshControl,
   // FlatList,
   ScrollView,
   Text,
@@ -22,11 +23,17 @@ import Messages from "../(components)/Messages";
 import { CourseInfoBox } from "../(components)/QuickCourse";
 import { SnowEffect } from "../(components)/SnowEffect";
 import UpdatesModal from "../(components)/UpdatesModal";
+import { mergeCoursesWithCache } from "../(utils)/courseCache";
 import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 
 const CoursesScreen = () => {
   const [showUpdates, setShowUpdates] = useState(false);
-  const appVersion = "1.2.2"; // keep in sync with app.json
+  const rawAppVersion =
+    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.3.0"; // keep in sync with app.json
+  const appVersion = rawAppVersion.startsWith("v")
+    ? rawAppVersion
+    : `v${rawAppVersion}`;
 
   // Show UpdatesModal once per app update
   useEffect(() => {
@@ -38,7 +45,7 @@ const CoursesScreen = () => {
           setShowUpdates(true);
           await AsyncStorage.setItem("lastSeenAppVersion", appVersion);
         }
-      } catch (e) {
+      } catch {
         setShowUpdates(true);
       }
     };
@@ -47,12 +54,23 @@ const CoursesScreen = () => {
   const { isDark } = useTheme();
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [message, setMessage] = useState("Loading...");
+  const [message, setMessage] = useState("");
+  const [refreshSource, setRefreshSource] = useState<
+    "pull" | "button" | null
+  >(null);
+  const [hideUnavailableMarks, setHideUnavailableMarks] = useState(false);
+  const [tapToRevealMarks, setTapToRevealMarks] = useState(false);
   const [shouldRefreshWithLogin, setShouldRefreshWithLogin] = useState(false);
   const [loginCredentials, setLoginCredentials] = useState<{
     username: string;
     password: string;
   } | null>(null);
+  const cachedCoursesRef = useRef<Course[] | null>(null);
+  const isButtonRefreshing = refreshSource === "button" && isLoading;
+  const isPullRefreshing = refreshSource === "pull" && isLoading;
+  const refreshButtonStyle = isButtonRefreshing
+    ? { opacity: 0.6, transform: [{ scale: 0.96 }] }
+    : undefined;
 
   // Christmas
   const now = new Date();
@@ -65,29 +83,37 @@ const CoursesScreen = () => {
     23,
     59,
     59,
-    999
+    999,
   ); // Jan 5
 
   const router = useRouter();
 
-  // load cached course html for cpurses w subject ids
-  const loadCachedCourses = async (courseList: Course[]) => {
-    const cached: { [key: string]: string } = {};
-    for (const course of courseList) {
-      if (course.subjectId) {
-        const cachedData = await SecureStorage.load(
-          `course_${course.subjectId}`
-        );
-        if (cachedData) {
-          cached[course.subjectId] = cachedData;
-        }
-      }
-    }
-  };
-
   const getUserName = async () => {
     const userName = await SecureStorage.load("ta_username");
     return userName;
+  };
+
+  const mergeAndSaveCourses = async (freshCourses: Course[]) => {
+    let cachedCourses: Course[] = [];
+    if (cachedCoursesRef.current) {
+      cachedCourses = cachedCoursesRef.current;
+    } else {
+      const cachedCoursesJson = await SecureStorage.load("ta_courses");
+      if (cachedCoursesJson) {
+        try {
+          cachedCourses = JSON.parse(cachedCoursesJson);
+        } catch {
+          cachedCourses = [];
+        }
+      }
+    }
+
+    const mergedCourses = mergeCoursesWithCache(freshCourses, cachedCourses);
+    cachedCoursesRef.current = null;
+
+    await SecureStorage.save("ta_courses", JSON.stringify(mergedCourses));
+    setCourses(mergedCourses);
+    return mergedCourses;
   };
 
   const onFetchResult = async (result: string) => {
@@ -98,9 +124,9 @@ const CoursesScreen = () => {
 
       if (savedUsername && savedPassword && !shouldRefreshWithLogin) {
         console.log(
-          "Session expired, attempting automatic re-authentication..."
+          "Session expired, attempting automatic re-authentication...",
         );
-        setMessage("Session expired. Re-authenticating...");
+        setMessage("");
         setLoginCredentials({
           username: savedUsername,
           password: savedPassword,
@@ -110,77 +136,32 @@ const CoursesScreen = () => {
       } else {
         // If already tried reauth or no credentials, redirect to signin
         setMessage("Please log in again.");
+        setShouldRefreshWithLogin(false);
+        setLoginCredentials(null);
         router.replace("/signin");
+        setRefreshSource(null);
       }
     } else if (result.includes("Login Success")) {
       // After successful login, reload the data
-      setMessage("Login successful! Loading courses...");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setMessage("");
+      hapticsNotification(Haptics.NotificationFeedbackType.Success);
       setShouldRefreshWithLogin(false);
-      loadHtmlOrFetch();
+      await loadHtmlOrFetch();
+      setRefreshSource(null);
     } else {
       // Parse the HTML using the new parser
       try {
         const parsedCoursesJson = parseStudentGrades(result);
         const parsedCourses: Course[] = JSON.parse(parsedCoursesJson);
-
-        // Save to secure storage
-        await SecureStorage.save("ta_courses", parsedCoursesJson);
-
-        setCourses(parsedCourses);
-
-        if (parsedCourses.length > 0) {
-          setMessage(
-            `Found ${parsedCourses.length} course(s). Fetching course details...`
-          );
-
-          // Fetch and cache details for each course with subjectId
-          await Promise.all(
-            parsedCourses
-              .filter((course) => course.subjectId)
-              .map(async (course) => {
-                try {
-                  // Use TeachAssistAuthFetcher to fetch course details
-                  // We'll use a Promise and a hidden component approach
-                  // But since this is not a React render, use fetch directly
-                  // If you have a fetchCourseDetails util, use it. Otherwise, fallback to fetch.
-                  // Here, we assume the endpoint is the same as fetchCourseUrl
-                  const courseUrl = `https://ta.yrdsb.ca/live/students/grades.php?subject_id=${course.subjectId}`;
-                  // Try to use fetch, but if cookies/session are needed, this may need to be improved
-                  // For now, just fetch and cache
-                  const html = await fetch(courseUrl)
-                    .then((r) => r.text())
-                    .catch(() => null);
-                  if (html) {
-                    await SecureStorage.save(
-                      `course_${course.subjectId}`,
-                      html
-                    );
-                  }
-                } catch (e) {
-                  // Ignore errors for individual courses
-                }
-              })
-          );
-
-          // Load cached HTML for courses with subject IDs
-          await loadCachedCourses(parsedCourses);
-
-          const coursesWithGrades = parsedCourses.filter(
-            (course) => course.hasGrade
-          );
-          setMessage(
-            `Courses loaded successfully. ${coursesWithGrades.length} courses have grades available.`
-          );
-        } else {
-          setMessage("No courses found in the response.");
-        }
+        await mergeAndSaveCourses(parsedCourses);
+        setMessage("");
       } catch (error) {
         console.error("Error parsing courses:", error);
         setMessage("Error parsing course data. Please try again.");
       }
 
       setIsLoading(false);
+      setRefreshSource(null);
     }
   };
 
@@ -188,6 +169,7 @@ const CoursesScreen = () => {
     setMessage(`Error: ${error}`);
     setShouldRefreshWithLogin(false);
     setIsLoading(false);
+    setRefreshSource(null);
   };
 
   const onLoadingChange = (loading: boolean) => {
@@ -195,7 +177,7 @@ const CoursesScreen = () => {
   };
 
   const loadHtmlOrFetch = async () => {
-    setMessage("Checking for saved courses...");
+    setMessage("");
     const savedCoursesJson = await SecureStorage.load("ta_courses");
 
     await getUserName();
@@ -203,12 +185,16 @@ const CoursesScreen = () => {
     if (savedCoursesJson) {
       try {
         const savedCourses: Course[] = JSON.parse(savedCoursesJson);
-        setCourses(savedCourses);
+        const mergedCourses = cachedCoursesRef.current
+          ? mergeCoursesWithCache(savedCourses, cachedCoursesRef.current)
+          : savedCourses;
+        cachedCoursesRef.current = null;
+        if (mergedCourses !== savedCourses) {
+          await SecureStorage.save("ta_courses", JSON.stringify(mergedCourses));
+        }
+        setCourses(mergedCourses);
 
-        // Load cached HTML for courses with subject IDs
-        await loadCachedCourses(savedCourses);
-
-        setMessage(``);
+        setMessage("");
         setIsLoading(false);
       } catch (error) {
         console.error("Error parsing saved courses:", error);
@@ -218,14 +204,15 @@ const CoursesScreen = () => {
     }
 
     if (!savedCoursesJson) {
-      setMessage("Stored courses not found. Trying again...");
       console.warn("Courses not found in storage");
       setIsLoading(true);
     }
   };
 
-  const handleRefresh = async () => {
+  const handleRefresh = async (source: "pull" | "button" = "button") => {
     setIsLoading(true);
+    setRefreshSource(source);
+    setMessage("");
 
     const networkState = await NetInfo.fetch();
     console.log("Connection type", networkState.type);
@@ -233,46 +220,124 @@ const CoursesScreen = () => {
     if (networkState.isConnected === false) {
       setMessage(`No internet connection.\nCheck your network and try again.`);
       setIsLoading(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setRefreshSource(null);
+      hapticsNotification(Haptics.NotificationFeedbackType.Error);
       return; // Exit early if no internet
     }
-    setCourses([]);
-
-    // Clear stored course data
-    await SecureStorage.delete("ta_courses");
-
-    // Clear cached HTML for courses that have subject IDs
-    for (const course of courses) {
-      if (course.subjectId) {
-        await SecureStorage.delete(`course_${course.subjectId}`);
-      }
-    }
+    // Keep current cache to merge in case TeachAssist hides grades temporarily.
+    cachedCoursesRef.current = courses;
 
     // Get credentials for re-authentication
     const savedUsername = await SecureStorage.load("ta_username");
     const savedPassword = await SecureStorage.load("ta_password");
 
     if (savedUsername && savedPassword) {
-      setMessage("Refreshing...");
       setLoginCredentials({
         username: savedUsername,
         password: savedPassword,
       });
       setShouldRefreshWithLogin(true);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticsNotification(Haptics.NotificationFeedbackType.Success);
     } else {
+      setIsLoading(false);
+      setRefreshSource(null);
+      setShouldRefreshWithLogin(false);
+      setLoginCredentials(null);
       router.replace("/signin");
       Alert.alert("Username and password not found. Please log in again.");
     }
   };
 
+  const hasVisibleGrade = (course: Course) => {
+    if (course.grade && course.grade !== "See teacher") {
+      return true;
+    }
+    return Boolean(course.midtermMark);
+  };
+
+  const visibleCourses = hideUnavailableMarks
+    ? courses.filter((course) => hasVisibleGrade(course))
+    : courses;
+
   // Filter courses by semester for organization
-  const semester1Courses = courses.filter((course) => course.semester === 1);
-  const semester2Courses = courses.filter((course) => course.semester === 2);
+  const semester1Courses = visibleCourses.filter(
+    (course) => course.semester === 1,
+  );
+  const semester2Courses = visibleCourses.filter(
+    (course) => course.semester === 2,
+  );
+  const showSemester2First =
+    now >= new Date(year, 1, 2) &&
+    now <= new Date(year, 5, 30, 23, 59, 59, 999);
+
+  const renderSemesterCourses = (semester: 1 | 2, list: Course[]) => {
+    if (list.length === 0) return null;
+    return (
+      <View>
+        <View className={`${semester === 1 ? "mt-8" : "mt-4"}`}>
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-medium`}
+          >
+            Semester{" "}
+            <Text className={`text-baccent text-2xl font-bold`}>
+              {semester}
+            </Text>
+          </Text>
+          <Text
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-md mb-2`}
+          >
+            {list.length} courses available
+          </Text>
+        </View>
+        {list.map((course) => (
+          <View key={`${course.courseCode}-${course.semester}`}>
+            {course.hasGrade ? (
+              <TouchableOpacity
+                onPress={() => {
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                  router.push(`/courseview/${course.subjectId}`);
+                }}
+                className="mb-6"
+              >
+                <CourseInfoBox
+                  course={course}
+                  hideMarksUntilTap={tapToRevealMarks}
+                />
+              </TouchableOpacity>
+            ) : (
+              <View className="mb-6">
+                <CourseInfoBox
+                  course={course}
+                  hideMarksUntilTap={tapToRevealMarks}
+                />
+              </View>
+            )}
+          </View>
+        ))}
+      </View>
+    );
+  };
 
   useEffect(() => {
     loadHtmlOrFetch();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadPreferences = async () => {
+        const storedHideUnavailable = await AsyncStorage.getItem(
+          "hide_unavailable_marks",
+        );
+        setHideUnavailableMarks(storedHideUnavailable === "true");
+        const storedTapToReveal = await AsyncStorage.getItem(
+          "tap_to_reveal_marks",
+        );
+        setTapToRevealMarks(storedTapToReveal === "true");
+      };
+
+      loadPreferences();
+    }, []),
+  );
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
@@ -287,19 +352,20 @@ const CoursesScreen = () => {
       ) : (
         <></>
       )}
-      <View className={`flex-row items-center justify-between mt-18 px-5`}>
+      <View className={`flex-row items-center justify-between mt-16 px-5`}>
         <Text
-          className={`text-5xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"}`}
+          className={`text-5xl font-semibold leading-[55px] ${isDark ? "text-appwhite" : "text-appblack"}`}
         >
           My Courses
         </Text>
         <View className="shadow-md">
           <TouchableOpacity
             onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-              handleRefresh();
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+              handleRefresh("button");
             }}
             className={`${isDark ? "bg-baccent/95" : "bg-baccent"} rounded-lg px-3 py-2`}
+            style={refreshButtonStyle}
             disabled={isLoading}
           >
             <Image
@@ -312,13 +378,9 @@ const CoursesScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
-      <Text
-        className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg mt-1 px-5`}
-      >
-        {Messages()}
-      </Text>
+      <Messages />
       {message === "" ? (
-        <View className={`mb-2`}></View> // show nothing successfully fetched
+        <View className={`mb-3`}></View> // show nothing successfully fetched
       ) : (
         <Text
           className={`${
@@ -330,173 +392,48 @@ const CoursesScreen = () => {
           {message}
         </Text> // disent betwn normal and no internet
       )}
-      {isLoading && (
-        <>
-          <ActivityIndicator size="large" color="#27b1fa" />
-          {message.includes("re-authenticate") && (
-            <TeachAssistAuthFetcher
-              fetchWithCookies
-              onResult={onFetchResult}
-              onError={onError}
-              onLoadingChange={onLoadingChange}
-            />
-          )}
-          {shouldRefreshWithLogin && loginCredentials && (
-            <TeachAssistAuthFetcher
-              loginParams={loginCredentials}
-              onResult={onFetchResult}
-              onError={onError}
-              onLoadingChange={onLoadingChange}
-            />
-          )}
-        </>
+      {isLoading && shouldRefreshWithLogin && loginCredentials && (
+        <TeachAssistAuthFetcher
+          loginParams={loginCredentials}
+          prefetchCourses
+          onResult={onFetchResult}
+          onError={onError}
+          onLoadingChange={onLoadingChange}
+        />
       )}
 
       {courses.length > 0 && (
-        <ScrollView showsVerticalScrollIndicator={false} className="px-5">
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          className="px-5"
+          refreshControl={
+            <RefreshControl
+              refreshing={isPullRefreshing}
+              onRefresh={() => handleRefresh("pull")}
+              tintColor="#27b1fa"
+              colors={["#27b1fa", "#43a25a", "#fcc245", "#f67c15"]}
+              progressBackgroundColor={`${isDark ? "#27b1fa30" : "#fbfbfb"}`}
+            />
+          }
+        >
           {/* this is literally the only way it works and i have no idea why wtf*/}
           <View className="shadow-md mt-5">
             <GradeAverageTracker
               showTrend={true}
               showCourseCount={true}
               showLastUpdated={true}
+              hideMarksUntilTap={tapToRevealMarks}
             />
           </View>
-          {/* sem 1 Courses */}
-          {semester1Courses.length > 0 && (
-            <View>
-              <View className={`mt-8`}>
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-medium`}
-                >
-                  Semester{" "}
-                  <Text className={`text-baccent text-2xl font-bold`}>1</Text>
-                </Text>
-                <Text
-                  className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-md mb-2`}
-                >
-                  {semester1Courses.length} courses available
-                </Text>
-              </View>
-              {semester1Courses.map((course) => (
-                <View key={`${course.courseCode}-${course.semester}`}>
-                  {course.hasGrade ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        router.push(`/courseview/${course.subjectId}`);
-                      }}
-                      className="mb-6"
-                    >
-                      <CourseInfoBox course={course} />
-                    </TouchableOpacity>
-                  ) : (
-                    <View className="shadow-md">
-                      <View
-                        style={{
-                          position: "relative",
-                          overflow: "hidden",
-                          borderRadius: 12,
-                        }}
-                        className="mb-6"
-                      >
-                        <CourseInfoBox course={course} />
-                        <View
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 1,
-                            overflow: "hidden",
-                            borderRadius: 12,
-                          }}
-                        >
-                          <ImageBackground
-                            source={
-                              isDark
-                                ? require("../../assets/images/striped_bg.png")
-                                : require("../../assets/images/striped_bg_white.png")
-                            }
-                            style={{ flex: 1 }}
-                            resizeMode="cover"
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
-            </View>
-          )}
-
-          {/* sem 2 Courses */}
-          {semester2Courses.length > 0 && (
+          {showSemester2First ? (
             <>
-              <View className={`mt-4`}>
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-medium`}
-                >
-                  Semester{" "}
-                  <Text className={`text-baccent text-2xl font-bold`}>2</Text>
-                </Text>
-                <Text
-                  className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-md mb-2`}
-                >
-                  {semester2Courses.length} courses available
-                </Text>
-              </View>
-              {semester2Courses.map((course) => (
-                <View key={`${course.courseCode}-${course.semester}`}>
-                  {course.hasGrade ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                        router.push(`/courseview/${course.subjectId}`);
-                      }}
-                      className="mb-6"
-                    >
-                      <CourseInfoBox course={course} />
-                    </TouchableOpacity>
-                  ) : (
-                    <View className="shadow-md">
-                      <View
-                        style={{
-                          position: "relative",
-                          overflow: "hidden",
-                          borderRadius: 12,
-                        }}
-                        className="mb-6"
-                      >
-                        <CourseInfoBox course={course} />
-                        <View
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            zIndex: 1,
-                            overflow: "hidden",
-                            borderRadius: 12,
-                          }}
-                        >
-                          <ImageBackground
-                            source={
-                              isDark
-                                ? require("../../assets/images/striped_bg.png")
-                                : require("../../assets/images/striped_bg_white.png")
-                            }
-                            style={{ flex: 1 }}
-                            resizeMode="cover"
-                          />
-                        </View>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              ))}
+              {renderSemesterCourses(2, semester2Courses)}
+              {renderSemesterCourses(1, semester1Courses)}
+            </>
+          ) : (
+            <>
+              {renderSemesterCourses(1, semester1Courses)}
+              {renderSemesterCourses(2, semester2Courses)}
             </>
           )}
           <TouchableOpacity

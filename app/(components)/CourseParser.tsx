@@ -12,9 +12,12 @@ interface Course {
   startDate: string;
   endDate: string;
   grade: string;
+  midtermMark?: string | null;
   hasGrade: boolean;
   semester: number;
   subjectId?: string;
+  reportUrl?: string;
+  isGradeStale?: boolean;
 }
 
 // ignore
@@ -26,7 +29,8 @@ interface ParserState {
   currentCell: number;
   currentText: string;
   isInHeader: boolean;
-  gradeLink?: string;
+  gradeLinkUrl?: string;
+  gradeLinkSubjectId?: string;
 }
 
 interface ParseResult {
@@ -133,7 +137,8 @@ function handleOpenTag(
     state.isInTableRow = true;
     state.currentCell = 0;
     state.currentCourse = {};
-    state.gradeLink = undefined;
+    state.gradeLinkUrl = undefined;
+    state.gradeLinkSubjectId = undefined;
 
     // check if header row
     state.isInHeader = !attributes.bgcolor && state.courses.length === 0;
@@ -155,7 +160,8 @@ function handleOpenTag(
   ) {
     const match = attributes.href.match(/subject_id=(\d{6})/);
     if (match && isSubjectId(match[1])) {
-      state.gradeLink = match[1];
+      state.gradeLinkUrl = attributes.href;
+      state.gradeLinkSubjectId = match[1];
     }
   }
 }
@@ -195,7 +201,12 @@ function handleCloseTag(name: string, state: ParserState): void {
         parseDateRange(cleanText, state.currentCourse);
         break;
       case 2: // Grade/Mark
-        parseGradeInfo(cleanText, state.currentCourse, state.gradeLink);
+        parseGradeInfo(
+          cleanText,
+          state.currentCourse,
+          state.gradeLinkSubjectId,
+          state.gradeLinkUrl
+        );
         break;
     }
     state.currentCell++;
@@ -259,26 +270,35 @@ function parseDateRange(text: string, course: Partial<Course>): void {
 function parseGradeInfo(
   text: string,
   course: Partial<Course>,
-  gradeLink?: string
+  gradeSubjectId?: string,
+  gradeLinkUrl?: string
 ): void {
   if (!text) {
     course.grade = "";
     course.hasGrade = false;
     return;
   }
+  const midtermMatch = text.match(/MIDTERM MARK:\s*(\d+\.?\d*)%/i);
+  if (midtermMatch) {
+    course.midtermMark = midtermMatch[1];
+  }
+  if (gradeSubjectId) {
+    course.subjectId = gradeSubjectId;
+  }
+  if (gradeLinkUrl) {
+    course.reportUrl = gradeLinkUrl;
+  }
   // check if no marks yet
   if (text.includes("Please see teacher for current status")) {
     course.grade = "See teacher";
     course.hasGrade = false; // modify change here
-    course.subjectId = gradeLink;
-  } else if (gradeLink) {
+  } else if (gradeSubjectId || gradeLinkUrl) {
 
     // get grade percentage ex "current mark = 97.8%"
     const gradeMatch = text.match(/current mark =\s*(\d+\.?\d*)%/);
     course.grade = gradeMatch ? gradeMatch[1] : text.trim();
     console.log("grade" + course.grade);
     course.hasGrade = true;
-    course.subjectId = gradeLink;
   } else {
     // otherwise
     course.grade = text.trim();

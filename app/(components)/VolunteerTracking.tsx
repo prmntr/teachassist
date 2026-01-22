@@ -17,6 +17,7 @@ import AnimatedProgressWheel from "react-native-progress-wheel";
 import { SecureStorage } from "../(auth)/taauth";
 import { useTheme } from "../contexts/ThemeContext";
 import BackButton from "./Back";
+import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 
 const VolunteerTracking = () => {
   const { isDark } = useTheme();
@@ -35,7 +36,7 @@ const VolunteerTracking = () => {
       try {
         await SecureStorage.save(
           "volunteer_hours",
-          JSON.stringify(volunteerHours)
+          JSON.stringify(volunteerHours),
         );
       } catch (e) {
         console.error("Failed to save volunteer hours:", e);
@@ -90,7 +91,7 @@ const VolunteerTracking = () => {
             setVolunteerHours(volunteerHours.filter((_, i) => i !== index));
           },
         },
-      ]
+      ],
     );
   };
 
@@ -117,20 +118,20 @@ const VolunteerTracking = () => {
     initialData?: any;
   }) => {
     const [assignmentName, setAssignmentName] = useState(
-      initialData?.name || ""
+      initialData?.name || "",
     );
     const [hoursCompleted, setHoursCompleted] = useState(
-      initialData?.hours ? String(initialData.hours) : ""
+      initialData?.hours ? String(initialData.hours) : "",
     );
     const [dateCompleted, setDateCompleted] = useState(
-      initialData?.date ? new Date(initialData.date) : new Date()
+      initialData?.date ? new Date(initialData.date) : new Date(),
     );
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [organization, setOrganization] = useState(
-      initialData?.organization || ""
+      initialData?.organization || "",
     );
     const [contactInfo, setContactInfo] = useState(
-      initialData?.contactInfo || ""
+      initialData?.contactInfo || "",
     );
     const [approved, setApproved] = useState(initialData?.approved || false);
 
@@ -258,7 +259,7 @@ const VolunteerTracking = () => {
                   <TouchableOpacity
                     className={`w-12 h-6 rounded-full ${approved ? "bg-baccent" : isDark ? "bg-dark4" : "bg-light4"} flex-row items-center`}
                     onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                       setApproved(!approved);
                     }}
                   >
@@ -279,7 +280,7 @@ const VolunteerTracking = () => {
                 className={`flex-1 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-3`}
                 onPress={() => {
                   onClose();
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                 }}
               >
                 <Text
@@ -307,7 +308,7 @@ const VolunteerTracking = () => {
                       : contactInfo,
                     approved,
                   });
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                 }}
               >
                 <Text className="text-white text-center font-medium">
@@ -344,7 +345,7 @@ const VolunteerTracking = () => {
         : entry.hours === ""
           ? 0
           : parseFloat(entry.hours)),
-    0
+    0,
   );
 
   let totalHoursDisplay = totalHours;
@@ -400,7 +401,7 @@ const VolunteerTracking = () => {
       <TouchableOpacity
         className={`absolute top-13 right-5 flex flex-row items-center z-50 gap-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-2 py-2 shadow-md`}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           setShowInfo(true);
         }}
       >
@@ -416,11 +417,19 @@ const VolunteerTracking = () => {
           <View
             className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6 w-full max-w-md`}
           >
-            <Text
-              className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-4`}
-            >
-              Volunteer Hours Info
-            </Text>
+            <View className="flex items-center mb-6">
+              <Image
+                source={require("../../assets/images/betta-fish2.png")}
+                className="w-30 h-35 object-scale-down"
+              ></Image>
+            </View>
+            <View className="flex-row items-center mb-4">
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+              >
+                Volunteer Tracking
+              </Text>
+            </View>
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
             >
@@ -486,12 +495,10 @@ const VolunteerTracking = () => {
             <TouchableOpacity
               className={`mt-2 ${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-lg p-3`}
               onPress={() => {
-                Haptics.notificationAsync(
-                  Haptics.NotificationFeedbackType.Success
-                );
+                hapticsNotification(Haptics.NotificationFeedbackType.Success);
                 setShowInfo(false);
                 Linking.openURL(
-                  "https://www2.yrdsb.ca/sites/default/files/2023-06/FOR-communityinvolvement.pdf"
+                  "https://www2.yrdsb.ca/sites/default/files/2023-06/FOR-communityinvolvement.pdf",
                 );
               }}
             >
@@ -504,7 +511,7 @@ const VolunteerTracking = () => {
             <TouchableOpacity
               className={`mt-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-3`}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                 setShowInfo(false);
               }}
             >
@@ -588,10 +595,9 @@ const VolunteerTracking = () => {
         <TouchableOpacity
           className="flex-1 bg-baccent/80 rounded-lg p-2 mr-2"
           onPress={() => {
-            openAddModal()
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          }
-          }
+            openAddModal();
+            hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+          }}
         >
           <Text className="text-white text-center font-semibold text-lg">
             + Add Volunteer Hours
@@ -662,7 +668,7 @@ const VolunteerTracking = () => {
                 <TouchableOpacity
                   className={`flex-1 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-3 flex-row items-center justify-center gap-2`}
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                     openEditModal(idx);
                   }}
                 >
@@ -680,7 +686,7 @@ const VolunteerTracking = () => {
                 <TouchableOpacity
                   className="flex-1 bg-danger/20 rounded-lg p-3 flex-row items-center justify-center gap-2"
                   onPress={() => {
-                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                    hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                     handleDelete(idx);
                   }}
                 >

@@ -4,6 +4,8 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
+  Modal,
   RefreshControl,
   Text,
   TouchableOpacity,
@@ -15,6 +17,7 @@ import TeachAssistAuthFetcher, {
 } from "../(auth)/taauth";
 import { useTheme } from "../contexts/ThemeContext";
 import BackButton from "./Back";
+import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 
 // view booked appointments
 //* NOTE: not exaustive only since last fresh login, ta's appts tracking are shit and unstable
@@ -27,8 +30,10 @@ const AppointmentsPage = () => {
   const [cancelingAppointment, setCancelingAppointment] =
     useState<AppointmentData | null>(null);
 
+  const [showInfo, setShowInfo] = useState(false);
+
   const [reasonMapping, setReasonMapping] = useState<Record<string, string>>(
-    {}
+    {},
   );
 
   // Load appointments
@@ -62,7 +67,11 @@ const AppointmentsPage = () => {
 
   // format
   const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
+    const [year, month, day] = dateString.split("-").map(Number);
+    const date =
+      Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)
+        ? new Date(dateString)
+        : new Date(year, month - 1, day);
     return date.toLocaleDateString("en-US", {
       weekday: "long",
       year: "numeric",
@@ -98,7 +107,7 @@ const AppointmentsPage = () => {
           style: "destructive",
           onPress: () => cancelAppointment(appointment),
         },
-      ]
+      ],
     );
   };
 
@@ -122,7 +131,7 @@ const AppointmentsPage = () => {
     } else {
       Alert.alert(
         "Error",
-        result || "Failed to cancel appointment. Please try again."
+        result || "Failed to cancel appointment. Please try again.",
       );
     }
   };
@@ -133,7 +142,7 @@ const AppointmentsPage = () => {
     setCancelingAppointment(null);
     Alert.alert(
       "Error",
-      error || "An error occurred while cancelling the appointment."
+      error || "An error occurred while cancelling the appointment.",
     );
   };
 
@@ -183,9 +192,17 @@ const AppointmentsPage = () => {
       </View>
 
       <View className={`mb-6 mt-2`}>
+        {item.teacher && (
+          <Text
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg`}
+          >
+            Counselor:{" "}
+            <Text className="text-baccent font-bold">{item.teacher}</Text>
+          </Text>
+        )}
         {item.reason && (
           <Text
-            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg font-light`}
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg`}
           >
             Appointment for:{" "}
             <Text className="text-baccent font-bold">
@@ -194,7 +211,7 @@ const AppointmentsPage = () => {
           </Text>
         )}
         <Text
-          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg font-light`}
+          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg`}
         >
           Booked:{" "}
           <Text className="text-baccent font-bold">
@@ -206,7 +223,7 @@ const AppointmentsPage = () => {
       <TouchableOpacity
         className={`py-3 px-4 rounded-lg items-center bg-danger`}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           handleCancelAppointment(item);
         }}
         disabled={loading}
@@ -238,8 +255,85 @@ const AppointmentsPage = () => {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <Modal visible={showInfo} transparent animationType="slide">
+        <View className="flex-1 bg-black/50 items-center justify-center px-4">
+          <View
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6 w-full max-w-md`}
+          >
+            <View className="flex items-center mb-6">
+              <Image
+                source={require("../../assets/images/betta-fish3.png")}
+                className="object-scale-down"
+                style={{
+                  width: 110,
+                  height: 92,
+                }}
+              ></Image>
+            </View>
+            <View className="flex-row items-center mb-4">
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+              >
+                My Appointments
+              </Text>
+            </View>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
+            >
+              This page keeps track of guidance appointments made within the
+              app, allowing you to view, and delete appointments, and notifies
+              you before your time.
+              {`\n\n`}
+              <Text className="font-semibold text-baccent">
+                Note: This list is not exaustive! If you booked an appointment
+                off the app or if you signed out recently, it may not show up.
+                Check the TeachAssist website for confirmation.
+              </Text>
+            </Text>
+            <TouchableOpacity
+              className={`mt-2 ${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-lg p-3`}
+              onPress={() => {
+                hapticsNotification(Haptics.NotificationFeedbackType.Success);
+                setShowInfo(false);
+                Linking.openURL("https://ta.yrdsb.ca/yrdsb/");
+              }}
+            >
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium text-center`}
+              >
+                TeachAssist Website
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              className={`mt-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg p-3`}
+              onPress={() => {
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                setShowInfo(false);
+              }}
+            >
+              <Text
+                className={`${isDark ? "text-appwhite" : "text-appblack"} text-center font-medium`}
+              >
+                Close
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <BackButton path={"/guidance"} />
-
+      <TouchableOpacity
+        className={`absolute top-13 right-5 flex flex-row items-center z-50 gap-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-2 py-2 shadow-md`}
+        onPress={() => {
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+          setShowInfo(true);
+        }}
+      >
+        <Image
+          source={require("../../assets/images/question.png")}
+          className="w-8 h-8"
+          style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
+        />
+      </TouchableOpacity>
       <View className={`px-5 mt-23 mb-5 items-center`}>
         <Text
           className={`text-4xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"} mt-8`}
@@ -289,15 +383,6 @@ const AppointmentsPage = () => {
           onLoadingChange={setLoading}
         />
       )}
-      <View className="items-center text-center">
-        <Text
-          className={`absolute bottom-4 text-center items-center mx-8 text-sm ${isDark ? "text-appgraydark" : "text-appgraylight"}`}
-        >
-          Note: This list is not exaustive! If you booked an appointment off the
-          app or if you signed out recently, it may not show up. Check the TA
-          website for conformation.
-        </Text>
-      </View>
     </View>
   );
 };

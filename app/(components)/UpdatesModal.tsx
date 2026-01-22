@@ -1,13 +1,22 @@
 import * as Haptics from "expo-haptics";
-import React from "react";
-import { Modal, ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { Link } from "expo-router";
+import { useEffect, useState, type ReactNode } from "react";
+import {
+  Image,
+  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SecureStorage } from "../(auth)/taauth";
+import { hapticsImpact } from "../(utils)/haptics";
 import { useTheme } from "../contexts/ThemeContext";
 
 interface UpdateItem {
   type: "new" | "improved" | "fixed";
   title: string;
-  description: string;
+  description: string | ReactNode;
 }
 
 interface UpdatesModalProps {
@@ -15,67 +24,111 @@ interface UpdatesModalProps {
   onClose: () => void;
   version?: string;
   updates?: UpdateItem[];
+  username?: string | null;
 }
 
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.2.2",
-  updates = [
-    {
-      type: "new",
-      title: "Volunteer Tracking",
-      description: "Input, track, and update your YRDSB volunteer hours.",
-    },
-    {
-      type: "improved",
-      title: "App Connectivity Issues",
-      description:
-        "Fixed bugs with the app not playing nice with internet connections",
-    },
-    {
-      type: "fixed",
-      title: "Bug fixes",
-      description:
-        "General bug fixes and speed improvments",
-    },
-    {
-      type: "new",
-      title: "2000+ users",
-      description: (
-        <Link
-          href={`https://prmntr.com/teachassist/reward/user`}
-          className={`my-2 underline`}
-        >
-          <Text>tysm for using the app ^w^</Text>
-        </Link>
-      ),
-    },
-  ],
+  version = "1.3.0",
+  updates,
+  username,
 }) => {
-  const getUpdateIcon = (type: "new" | "improved" | "fixed") => {
-    switch (type) {
-      case "new":
-        return "✨";
-      case "improved":
-        return "🚀";
-      case "fixed":
-        return "🔧";
-      default:
-        return "📱";
+  const [resolvedUsername, setResolvedUsername] = useState<string | null>(
+    username ?? null,
+  );
+
+  useEffect(() => {
+    if (username) {
+      setResolvedUsername(username);
+      return;
     }
+
+    let isMounted = true;
+    SecureStorage.load("ta_username")
+      .then((value) => {
+        if (isMounted) setResolvedUsername(value);
+      })
+      .catch(() => {
+        if (isMounted) setResolvedUsername(null);
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [username]);
+
+  const rewardUser = (resolvedUsername ?? "").trim() || "user";
+  const rewardUrl = `https://prmntr.com/teachassist/reward/${encodeURIComponent(
+    rewardUser,
+  )}`;
+
+  const resolvedUpdates =
+    updates ??
+    ([
+      {
+        type: "new",
+        title: "Notifications",
+        description:
+          "Get notified for released assignments, guidance appointments, and more!",
+      },
+      {
+        type: "new",
+        title: "Midterm Grades",
+        description: "View your midterm marks from the courses tab",
+      },
+      {
+        type: "improved",
+        title: "Revamped Analytics",
+        description: "See past numerical averages,\nplus a cleaned up design",
+      },
+      {
+        type: "new",
+        title: "Settings Overhaul",
+        description:
+          "New privacy settings to control grade visibility, plus greeting messages",
+      },
+      {
+        type: "fixed",
+        title: "App Signin Issues",
+        description:
+          "Fixed a bug with how the app deals with tapping into courses",
+      },
+      {
+        type: "fixed",
+        title: "Bug fixes",
+        description:
+          "General stability improvments to reduce unexpected errors",
+      },
+      {
+        type: "new",
+        title: "2000+ users",
+        description: (
+          <Link href={rewardUrl as any} className={`my-2 underline`}>
+            <Text>tysm for using the app (⁠◍⁠•⁠ᴗ⁠•⁠◍⁠)⁠❤</Text>
+          </Link>
+        ),
+      },
+    ] satisfies UpdateItem[]);
+  const updateIcons: Record<"new" | "improved" | "fixed", any> = {
+    new: require("../../assets/images/sparkle.png"),
+    improved: require("../../assets/images/lightning.png"),
+    fixed: require("../../assets/images/wrench.png"),
+  };
+
+  const getUpdateIcon = (type: "new" | "improved" | "fixed") => {
+    return updateIcons[type] || require("../../assets/images/update.png");
   };
 
   const getUpdateColor = (type: "new" | "improved" | "fixed") => {
     switch (type) {
       case "new":
-        return "bg-success";
+        return "bg-success/60";
       case "improved":
-        return "bg-baccent";
+        return "bg-baccent/60";
       case "fixed":
-        return "bg-caution";
+        return "bg-caution/60";
       default:
-        return "bg-gray-400";
+        return "bg-gray-400/60";
     }
   };
 
@@ -114,8 +167,14 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
                   Here{`'`}s what{`'`}s new this update.
                 </Text>
               </View>
-              <View className={`bg-baccent/50 rounded-full p-3`}>
-                <Text className={`text-3xl`}>🎉</Text>
+              <View className={`bg-baccent/80 p-3 rounded-full`}>
+                <Image
+                  className={`w-8 h-8`}
+                  style={{
+                    tintColor: "#fafafa",
+                  }}
+                  source={require("../../assets/images/confetti.png")}
+                />
               </View>
             </View>
           </View>
@@ -124,15 +183,17 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
             className={`flex-1 px-6 py-4`}
             showsVerticalScrollIndicator={false}
           >
-            {updates.map((update, index) => (
+            {resolvedUpdates.map((update, index) => (
               <View key={index} className={`mb-6 last:mb-2`}>
                 <View className={`flex-row items-start mb-2`}>
-                  <View
-                    className={`${isDark ? "bg-appgraydark/40" : "bg-appgraylight/40"} rounded-lg p-2 mr-3 mt-1`}
-                  >
-                    <Text className={`text-lg`}>
-                      {getUpdateIcon(update.type)}
-                    </Text>
+                  <View className={`bg-baccent/80 mr-3 p-2 rounded-full`}>
+                    <Image
+                      className={`w-6 h-6`}
+                      style={{
+                        tintColor: "#fafafa",
+                      }}
+                      source={getUpdateIcon(update.type)}
+                    />
                   </View>
                   <View className={`flex-1`}>
                     <View className={`flex-row items-center mb-1`}>
@@ -142,10 +203,10 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
                         {update.title}
                       </Text>
                       <View
-                        className={`${getUpdateColor(update.type)} rounded-full px-3 py-1`}
+                        className={`${getUpdateColor(update.type)} rounded-lg px-2 py-1`}
                       >
                         <Text
-                          className={`${isDark ? "text-appblack" : "text-appblack"} text-xs font-bold uppercase`}
+                          className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm font-bold text-center`}
                         >
                           {update.type}
                         </Text>
@@ -176,7 +237,7 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
             </View>
             */}
             <Text
-              className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center font-light text-md`}
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center font-light text-md mb-8`}
             >
               As always, thank you for using TeachAssist.
             </Text>
@@ -187,7 +248,7 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
             <TouchableOpacity
               className={`${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-xl py-3 px-6 items-center`}
               onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                 onClose();
               }}
             >

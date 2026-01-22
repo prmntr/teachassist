@@ -12,63 +12,74 @@ const Guidance = () => {
       >
         Credits
       </Text>
-      <View className={`my-3`}>
+      <View className={`my-3 flex flex-row flex-wrap`}>
         <Link
           href="https://www.flaticon.com/free-icons/course"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2`}
         >
-          <Text>Course icons created by Tanah Basah - Flaticon</Text>
+          <Text>Tanah Basah</Text>
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/user"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2`}
         >
-          <Text>User icons created by Graphics Plazza - Flaticon</Text>
+          <Text>Graphics Plazza</Text>
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/reload"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2`}
         >
-          <Text>Reload icons created by Uniconlabs - Flaticon</Text>
+          <Text>Uniconlabs</Text>
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/magnifying-glass"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2`}
         >
-          <Text>Magnifying glass icons created by paonkz - Flaticon</Text>
+          <Text>paonkz</Text>
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/arrow"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2`}
         >
-          <Text>Arrow icons created by Dave Gandy - Flaticon</Text>
-        </Link>
-        <Link
-          href="https://www.flaticon.com/free-icons/rectangle"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
-        >
-          <Text>Rectangle icons created by Freepik - Flaticon</Text>
+          <Text>Dave Gandy</Text>
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/pencil"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2`}
         >
-          <Text>Pencil icons created by Anggara - Flaticon</Text>
+          <Text>Anggara</Text>
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/tick"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2 mb-5`}
         >
-          <Text>Tick icons created by Pixel perfect - Flaticon</Text>
-        </Link>
-        <Link
-          href="https://streamable.com/lf027o"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 underline`}
-        >
-          <Text>You, for using the app 💖</Text>
+          <Text>Pixel perfect</Text>
         </Link>
       </View>
-
+      <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
+        Dr. Dykshoorn
+      </Text>
+      <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
+        Dr. Dykshoorn
+      </Text>
+      <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
+        Dr. Dykshoorn
+      </Text>
+      <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
+        Dr. Dykshoorn
+      </Text>
+      <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
+        Dr. Dykshoorn
+      </Text>
+      <View style={{ alignItems: "center" }}>
+        <Link
+          href="https://streamable.com/lf027o"
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 bg-success/70 py-2 px-3 rounded-lg`}
+          style={{ alignSelf: "center" }}
+        >
+          <Text>You, for using the app {`(⁠/⁠･⁠ω⁠･⁠(⁠-⁠ω⁠-⁠)`}</Text>
+        </Link>
+      </View>
       <Link
         href="/profile"
         className={`mt-5 font-bold bg-baccent/80 ${isDark ? "text-appwhite" : "text-appblack"} py-2 rounded-lg text-lg text-center flex`}
@@ -80,10 +91,7 @@ const Guidance = () => {
         className="absolute bottom-4 overflow-hidden"
         style={{ width: "200%" }}
       >
-        <Text className="text-appgraydark">
-          THE END IS NEVER THE END IS NEVER THE END IS NEVER THE END IS NEVER
-          THE END IS NEVER THE END
-        </Text>
+        <Text className="text-appgraydark"> - BSS on top</Text>
       </View>
     </View>
   );

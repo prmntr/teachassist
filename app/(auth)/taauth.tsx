@@ -1,10 +1,12 @@
+import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, View } from "react-native";
-import { WebView, WebViewMessageEvent } from "react-native-webview";
+import { useEffect, useRef } from "react";
 import { parseStudentGrades } from "../(components)/CourseParser";
+import { resolveReportUrl } from "../(utils)/courseCache";
 
 // every interaction to the outside world should be passed through here
+
+const INDEX_URL = "https://ta.yrdsb.ca/live/index.php?subject_id=0";
 
 // wrapper for expo-secure-store
 export class SecureStorage {
@@ -33,6 +35,7 @@ type LoginParams = {
 // Form data for appointment booking
 export interface AppointmentFormData {
   reason?: string;
+  reasonLabel?: string;
   withParent?: boolean;
   online?: boolean;
   hiddenFields: Record<string, string>;
@@ -50,18 +53,26 @@ export interface AppointmentData {
   schoolId: string;
 }
 
+type AppointmentMeta = {
+  teacher?: string;
+  subject?: string;
+};
+
 interface TeachAssistAuthFetcherProps {
   loginParams?: LoginParams;
   // get specific course
   fetchCourseUrl?: string;
   // fetch with saved cookies; for getting courses
   fetchWithCookies?: boolean;
+  // when fetching the main courses page, also prefetch each course report into SecureStorage
+  prefetchCourses?: boolean;
   // getting guidance w/ date
   getGuidance?: Date;
   // booking appointment
   bookAppointment?: string;
   // submitting appointment form data
   submitAppointmentForm?: AppointmentFormData;
+  appointmentMeta?: AppointmentMeta;
   // cancel appointment
   cancelAppointment?: {
     date: string;
@@ -75,402 +86,684 @@ interface TeachAssistAuthFetcherProps {
   onLoadingChange?: (isLoading: boolean) => void; // put as optional for future maybe but strongly reccemended
 }
 
-interface WebViewDataMessage {
-  type: "htmlAndCookies" | "error";
-  html?: string;
-  cookies?: string;
-  data?: string;
-}
+const decodeHtmlEntities = (value: string): string => {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'");
+};
 
-// main function: recieves all these props
+const parseCookieHeader = (value: string | null): Record<string, string> => {
+  if (!value) return {};
+  return value
+    .split(";")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .reduce<Record<string, string>>((acc, part) => {
+      const [name, ...rest] = part.split("=");
+      if (!name || rest.length === 0) return acc;
+      acc[name] = rest.join("=");
+      return acc;
+    }, {});
+};
+
+const parseSetCookieHeader = (value: string | null): Record<string, string> => {
+  if (!value) return {};
+  const parts = value.split(/, (?=[^;]+?=)/);
+  return parts.reduce<Record<string, string>>((acc, part) => {
+    const [cookiePair] = part.split(";");
+    const [name, ...rest] = cookiePair.trim().split("=");
+    if (!name || rest.length === 0) return acc;
+    acc[name] = rest.join("=");
+    return acc;
+  }, {});
+};
+
+const extractStudentIdFromHtml = (html: string): string | null => {
+  if (!html) return null;
+  const queryMatch = html.match(/student_id=(\d+)/i);
+  if (queryMatch?.[1]) return queryMatch[1];
+  const inputMatch = html.match(
+    /name=["']student_id["'][^>]*value=["'](\d+)["']/i
+  );
+  return inputMatch?.[1] ?? null;
+};
+
+const extractSessionTokenFromHtml = (html: string): string | null => {
+  if (!html) return null;
+  const queryMatch = html.match(/session_token=([^&"'\s]+)/i);
+  if (queryMatch?.[1]) return queryMatch[1];
+  const inputMatch = html.match(
+    /name=["']session_token["'][^>]*value=["']([^"']+)["']/i
+  );
+  return inputMatch?.[1] ?? null;
+};
+
+const buildCookieHeader = async (): Promise<string | null> => {
+  const storedCookies = await SecureStorage.load("ta_cookies");
+  if (storedCookies && storedCookies.length > 0) {
+    return storedCookies;
+  }
+
+  const studentId = await SecureStorage.load("ta_student_id");
+  const sessionToken = await SecureStorage.load("ta_session_token");
+  if (!sessionToken) return null;
+  const cookieParts = [`session_token=${sessionToken}`];
+  if (studentId) cookieParts.push(`student_id=${studentId}`);
+  return cookieParts.join("; ");
+};
+
+const syncCookiesFromResponse = async (response: Response) => {
+  const setCookie = response.headers?.get?.("set-cookie");
+  if (!setCookie) return;
+
+  const current = parseCookieHeader(await SecureStorage.load("ta_cookies"));
+  const updates = parseSetCookieHeader(setCookie);
+  const merged = { ...current, ...updates };
+  const mergedHeader = Object.entries(merged)
+    .map(([name, value]) => `${name}=${value}`)
+    .join("; ");
+
+  if (mergedHeader.length > 0) {
+    await SecureStorage.save("ta_cookies", mergedHeader);
+  }
+
+  const studentId = merged.student_id ?? null;
+  const sessionToken = merged.session_token ?? null;
+  if (studentId) await SecureStorage.save("ta_student_id", studentId);
+  if (sessionToken) await SecureStorage.save("ta_session_token", sessionToken);
+};
+
+const syncStoredSessionFromCookies = async () => {
+  const cookies = parseCookieHeader(await SecureStorage.load("ta_cookies"));
+  const studentId = cookies.student_id ?? null;
+  const sessionToken = cookies.session_token ?? null;
+
+  if (studentId) {
+    await SecureStorage.save("ta_student_id", studentId);
+  }
+
+  if (sessionToken) {
+    await SecureStorage.save("ta_session_token", sessionToken);
+  }
+
+  return { studentId, sessionToken };
+};
+
+const fetchHtmlWithCookies = async (
+  url: string,
+  init: RequestInit = {}
+): Promise<{ html: string; response: Response }> => {
+  const cookieHeader = await buildCookieHeader();
+  const headers = new Headers(init.headers ?? {});
+
+  if (cookieHeader) {
+    headers.set("Cookie", cookieHeader);
+  }
+
+  if (!headers.has("Accept")) {
+    headers.set("Accept", "text/html,application/xhtml+xml,application/xml");
+  }
+
+  const response = await fetch(url, {
+    ...init,
+    headers,
+    credentials: "include",
+  });
+
+  await syncCookiesFromResponse(response);
+
+  const html = await response.text();
+  return { html, response };
+};
+
+const getSubjectIdFromUrl = (url: string | null): string | null => {
+  if (!url) return null;
+  const match = url.match(/subject_id=(\d+)/);
+  return match?.[1] ?? null;
+};
+
+const buildCourseReportUrl = async (
+  subjectId: string
+): Promise<string | null> => {
+  const savedStudentId = await SecureStorage.load("ta_student_id");
+  const savedSchoolId = await SecureStorage.load("school_id");
+  if (!savedStudentId || !savedSchoolId) return null;
+  return `https://ta.yrdsb.ca/live/students/viewReport.php?subject_id=${subjectId}&student_id=${savedStudentId}&school_id=${savedSchoolId}`;
+};
+
+const isCourseReportHtml = (html: string): boolean => {
+  return (
+    html.includes("Assignment</th>") ||
+    html.includes("Course Weighting") ||
+    html.includes("Student Achievement")
+  );
+};
+
+const prefetchCourseReports = async (coursesJson: string): Promise<boolean> => {
+  let parsed: any[] = [];
+  try {
+    parsed = JSON.parse(coursesJson);
+  } catch {
+    return false;
+  }
+
+  const urls: string[] = [];
+  for (const course of parsed) {
+    const reportUrl = course?.reportUrl
+      ? resolveReportUrl(String(course.reportUrl).replace(/&amp;/g, "&"))
+      : null;
+
+    if (reportUrl) {
+      urls.push(reportUrl);
+      continue;
+    }
+
+    if (course?.subjectId) {
+      const url = await buildCourseReportUrl(String(course.subjectId));
+      if (url) urls.push(url);
+    }
+  }
+
+  const uniqueUrls = Array.from(new Set(urls));
+  if (uniqueUrls.length === 0) return false;
+
+  for (const url of uniqueUrls) {
+    const { html } = await fetchHtmlWithCookies(url);
+    if (html.toLowerCase().includes("log in")) {
+      return false;
+    }
+    const subjectId = getSubjectIdFromUrl(url);
+    if (subjectId && isCourseReportHtml(html)) {
+      await SecureStorage.save(`course_${subjectId}`, html);
+    }
+  }
+
+  return true;
+};
+
+const resolveAppointmentSubject = async (
+  appointmentInfo: Partial<AppointmentData>
+): Promise<string> => {
+  const subject = (appointmentInfo.subject ?? "").trim();
+  if (subject) return subject;
+
+  const reason = (appointmentInfo.reason ?? "").trim();
+  if (!reason) return "";
+
+  try {
+    const reasonMappingJson = await SecureStorage.load("reason_mapping");
+    if (reasonMappingJson) {
+      const reasonMapping = JSON.parse(reasonMappingJson) as Record<
+        string,
+        string
+      >;
+      const mappedReason = reasonMapping?.[reason];
+      if (mappedReason) return mappedReason;
+    }
+  } catch {
+    // ignore invalid mappings and fall back to the raw reason
+  }
+
+  return reason;
+};
+
+// new appointment has been booked, save to securestore
+const saveAppointmentData = async (
+  appointmentInfo: Partial<AppointmentData>
+) => {
+  try {
+    // Load existing appointments
+    const existingAppointmentsJson =
+      await SecureStorage.load("ta_appointments");
+    let appointments: AppointmentData[] = [];
+
+    if (existingAppointmentsJson) {
+      appointments = JSON.parse(existingAppointmentsJson);
+    }
+
+    const subject = await resolveAppointmentSubject(appointmentInfo);
+    const teacher = (appointmentInfo.teacher ?? "").trim();
+
+    // make new appointment object
+    const newAppointment: AppointmentData = {
+      id: appointmentInfo.id || Date.now().toString(),
+      date: appointmentInfo.date || "",
+      time: appointmentInfo.time || "",
+      teacher,
+      subject,
+      reason: appointmentInfo.reason || "",
+      bookedAt: new Date().toISOString(),
+      schoolId: appointmentInfo.schoolId || "",
+    };
+
+    appointments.push(newAppointment);
+
+    await SecureStorage.save("ta_appointments", JSON.stringify(appointments));
+    console.log("taauth: Appointment data saved successfully");
+    await refreshGuidanceReminders();
+  } catch (error) {
+    console.error("taauth: Error saving appointment data:", error);
+  }
+};
+
+// remove appointment from secure store
+const removeAppointmentData = async (appointmentId: string) => {
+  try {
+    const existingAppointmentsJson =
+      await SecureStorage.load("ta_appointments");
+    if (existingAppointmentsJson) {
+      let appointments: AppointmentData[] = JSON.parse(
+        existingAppointmentsJson
+      );
+      appointments = appointments.filter((apt) => apt.id !== appointmentId);
+      await SecureStorage.save("ta_appointments", JSON.stringify(appointments));
+      console.log("taauth: Appointment removed successfully");
+      await refreshGuidanceReminders();
+    }
+  } catch (error) {
+    console.error("taauth: Error removing appointment data:", error);
+  }
+};
+
+// parse the url to get the important parts of the appointment
+const extractAppointmentFromUrl = (url: string) => {
+  const urlParams = new URLSearchParams(url.split("?")[1]);
+  return {
+    date: urlParams.get("dt") || urlParams.get("inputDate") || "",
+    time: urlParams.get("tm") || "",
+    id: urlParams.get("id") || "",
+    schoolId: urlParams.get("school_id") || "",
+  };
+};
+
+const fetchSchoolName = async (schoolId: string) => {
+  try {
+    console.log(`taauth: Fetching school name for school ID ${schoolId}`);
+    const calendarUrl = `https://ta.yrdsb.ca/live/students/calendar_full.php?school_id=${schoolId}`;
+
+    const response = await fetch(calendarUrl); // no cookies needed
+
+    if (response.ok) {
+      const calendarHtml = await response.text();
+      // get school name
+      const h1Match = calendarHtml.match(/<h1[^>]*>(.*?)<\/h1>/i);
+      if (h1Match && h1Match[1]) {
+        const fullH1Text = h1Match[1].trim();
+        // bc calender has school full cal at front
+        const schoolName = fullH1Text
+          .replace(/\s+School Full Calendar$/i, "")
+          .trim();
+        console.log(`taauth: school name is ${schoolName}`);
+        await SecureStorage.save("school_name", schoolName);
+        return schoolName;
+      } else {
+        console.warn("taauth: Could not find h1 tag in calendar page");
+        return null;
+      }
+    } else {
+      console.warn(
+        `taauth: Failed to fetch calendar page, status: ${response.status}`
+      );
+      return null;
+    }
+  } catch (error) {
+    console.error("taauth: Error fetching school name:", error);
+    return null;
+  }
+};
+
+// make the form data to prepare for POST
+const createFormDataString = (formData: AppointmentFormData): string => {
+  const params = new URLSearchParams();
+
+  // add all hidden fields
+  Object.entries(formData.hiddenFields).forEach(([key, value]) => {
+    params.append(key, value);
+  });
+
+  // Add form selections
+  if (formData.reason) {
+    params.append("reason", formData.reason);
+  }
+
+  if (formData.withParent) {
+    params.append("withParent", "10");
+  }
+
+  if (formData.online) {
+    params.append("online", "100");
+  }
+
+  params.append("submit", "Submit Reason");
+
+  return params.toString();
+};
+
+const isAppointmentForm = (html: string): boolean => {
+  return (
+    html.includes('name="reason"') &&
+    html.includes('type="radio"') &&
+    html.includes("Submit Reason")
+  );
+};
+
+const refreshGuidanceReminders = async () => {
+  if (Constants.appOwnership === "expo") return;
+  try {
+    const { scheduleGuidanceReminders } =
+      await import("../(utils)/notifications");
+    await scheduleGuidanceReminders();
+  } catch (error) {
+    console.warn("taauth: Failed to refresh guidance reminders", error);
+  }
+};
+
 const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
   loginParams,
   fetchWithCookies,
+  prefetchCourses,
   fetchCourseUrl,
   getGuidance,
   bookAppointment,
   submitAppointmentForm,
+  appointmentMeta,
   cancelAppointment,
   onResult,
   onError,
   onLoadingChange,
 }) => {
-  const webviewRef = useRef<WebView>(null);
-  const [targetUrl, setTargetUrl] = useState<string | null>(null);
-  const [timeoutId, setTimeoutId] = useState<ReturnType<
-    typeof setTimeout
-  > | null>(null);
-  const [isReauthenticating, setIsReauthenticating] = useState(false);
+  const isMountedRef = useRef(true);
 
-  // for retry; store what was originally requested
-  const originalRequestRef = useRef<any>(null);
-
-  // new appointment has been booked, save to securestore
-  const saveAppointmentData = async (
-    appointmentInfo: Partial<AppointmentData>
-  ) => {
-    try {
-      // Load existing appointments
-      const existingAppointmentsJson =
-        await SecureStorage.load("ta_appointments");
-      let appointments: AppointmentData[] = [];
-
-      if (existingAppointmentsJson) {
-        appointments = JSON.parse(existingAppointmentsJson);
-      }
-
-      // make new appointment object
-      const newAppointment: AppointmentData = {
-        id: appointmentInfo.id || Date.now().toString(),
-        date: appointmentInfo.date || "",
-        time: appointmentInfo.time || "",
-        teacher: appointmentInfo.teacher || "",
-        subject: appointmentInfo.subject || "",
-        reason: appointmentInfo.reason || "",
-        bookedAt: new Date().toISOString(),
-        schoolId: appointmentInfo.schoolId || "",
-      };
-
-      appointments.push(newAppointment);
-
-      await SecureStorage.save("ta_appointments", JSON.stringify(appointments));
-      console.log("taauth: Appointment data saved successfully");
-    } catch (error) {
-      console.error("taauth: Error saving appointment data:", error);
-    }
-  };
-
-  // remove appointment from secure store
-  const removeAppointmentData = async (appointmentId: string) => {
-    try {
-      const existingAppointmentsJson =
-        await SecureStorage.load("ta_appointments");
-      if (existingAppointmentsJson) {
-        let appointments: AppointmentData[] = JSON.parse(
-          existingAppointmentsJson
-        );
-        appointments = appointments.filter((apt) => apt.id !== appointmentId);
-        await SecureStorage.save(
-          "ta_appointments",
-          JSON.stringify(appointments)
-        );
-        console.log("taauth: Appointment removed successfully");
-      }
-    } catch (error) {
-      console.error("taauth: Error removing appointment data:", error);
-    }
-  };
-
-  // parse the url to get the important parts of the appointment
-  const extractAppointmentFromUrl = (url: string) => {
-    const urlParams = new URLSearchParams(url.split("?")[1]);
-    return {
-      date: urlParams.get("dt") || urlParams.get("inputDate") || "",
-      time: urlParams.get("tm") || "",
-      id: urlParams.get("id") || "",
-      schoolId: urlParams.get("school_id") || "",
-    };
-  };
-
-  const fetchSchoolName = async (schoolId: string) => {
-    try {
-      console.log(`taauth: Fetching school name for school ID ${schoolId}`);
-      const calendarUrl = `https://ta.yrdsb.ca/live/students/calendar_full.php?school_id=${schoolId}`;
-
-      const response = await fetch(calendarUrl); // no cookies needed
-
-      if (response.ok) {
-        const calendarHtml = await response.text();
-        // get school name
-        const h1Match = calendarHtml.match(/<h1[^>]*>(.*?)<\/h1>/i);
-        if (h1Match && h1Match[1]) {
-          const fullH1Text = h1Match[1].trim();
-          // bc calender has school full cal at front
-          const schoolName = fullH1Text
-            .replace(/\s+School Full Calendar$/i, "")
-            .trim();
-          console.log(`taauth: school name is ${schoolName}`);
-          await SecureStorage.save("school_name", schoolName);
-          return schoolName;
-        } else {
-          console.warn("taauth: Could not find h1 tag in calendar page");
-          return null;
-        }
-      } else {
-        console.warn(
-          `taauth: Failed to fetch calendar page, status: ${response.status}`
-        );
-        return null;
-      }
-    } catch (error) {
-      console.error("taauth: Error fetching school name:", error);
-      return null;
-    }
-  };
-
-  // make the form data to prepare for POST
-  const createFormDataString = (formData: AppointmentFormData): string => {
-    const params = new URLSearchParams();
-
-    // add all hidden fields
-    Object.entries(formData.hiddenFields).forEach(([key, value]) => {
-      params.append(key, value);
-    });
-
-    // Add form selections
-    if (formData.reason) {
-      params.append("reason", formData.reason);
-    }
-
-    if (formData.withParent) {
-      params.append("withParent", "10");
-    }
-
-    if (formData.online) {
-      params.append("online", "100");
-    }
-
-    params.append("submit", "Submit Reason");
-
-    return params.toString();
-  };
-
-  // if it takes too long, it's prob b/c cookies expired, this reauths it
-  const handleTimeout = async () => {
-    // If the caller is already explicitly logging in, don't try to hijack the flow.
-    if (loginParams || isReauthenticating) return;
-
-    console.log(
-      "taauth: request exceeded 1.5s, attempting re-authentication..."
-    );
-
-    // Save what we were trying to do so we can decide what to do after reauth.
-    if (!originalRequestRef.current) {
-      originalRequestRef.current = {
-        fetchCourseUrl,
-        fetchWithCookies,
-        getGuidance,
-        bookAppointment,
-        submitAppointmentForm,
-        cancelAppointment,
-      };
-    }
-
-    setIsReauthenticating(true);
-
-    try {
-      const savedUsername = await SecureStorage.load("ta_username");
-      const savedPassword = await SecureStorage.load("ta_password");
-
-      if (!savedUsername || !savedPassword) {
-        onError?.(
-          "Session expired and no saved credentials found. Please log in again."
-        );
-        onLoadingChange?.(false);
-        setIsReauthenticating(false);
-        return;
-      }
-
-      // Force a real re-login so TeachAssist issues fresh cookies.
-      const encodedUsername = encodeURIComponent(savedUsername);
-      const encodedPassword = encodeURIComponent(savedPassword);
-      const loginUrl = `https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
-      console.log("taauth: Re-authentication login URL set");
-      setTargetUrl(loginUrl);
-
-      // Give reauth a slightly longer leash than normal page loads.
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      const timeout = setTimeout(handleTimeout, 4000);
-      setTimeoutId(timeout);
-    } catch (error) {
-      console.error("taauth: Error during re-authentication:", error);
-      onError?.("Failed to re-authenticate");
-      onLoadingChange?.(false);
-      setIsReauthenticating(false);
-    }
-  };
-
-  // login got the cookies resolved, retry
-  const retryOriginalRequest = async () => {
-    setIsReauthenticating(false);
-    console.log("here");
-    console.log(await SecureStorage.load("ta_session_token"));
-    const originalRequest = originalRequestRef.current;
-    console.log("original request is" + JSON.stringify(originalRequest));
-    if (!originalRequest) {
-      console.error("taauth: No original request to retry");
-      setIsReauthenticating(false);
-      onError?.(
-        "Re-authentication completed but no request to retry. Please try again."
-      );
-      onLoadingChange?.(false);
-      return;
-    }
-
-    console.log("taauth: retrying original request...");
-
-    try {
-      const savedStudentId = await SecureStorage.load("ta_student_id");
-      const savedSessionToken = await SecureStorage.load("ta_session_token");
-
-      if (originalRequest.fetchCourseUrl) {
-        setTargetUrl(originalRequest.fetchCourseUrl);
-      } else if (
-        originalRequest.fetchWithCookies &&
-        savedStudentId &&
-        savedSessionToken
-      ) {
-        setTargetUrl("https://ta.yrdsb.ca/live/index.php?subject_id=0");
-      } else if (
-        originalRequest.getGuidance &&
-        savedStudentId &&
-        savedSessionToken
-      ) {
-        const savedSchoolId = await SecureStorage.load("school_id");
-        if (savedSchoolId) {
-          const formatDateForAPI = (date: Date): string => {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, "0");
-            const day = String(date.getDate()).padStart(2, "0");
-            return `${year}-${month}-${day}`;
-          };
-          const guidanceDate = formatDateForAPI(originalRequest.getGuidance);
-          console.log(
-            `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`
-          );
-          setTargetUrl(
-            `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`
-          );
-        } else {
-          throw new Error("No School ID found");
-        }
-      } else if (
-        originalRequest.bookAppointment &&
-        savedStudentId &&
-        savedSessionToken
-      ) {
-        const decodedUrl = originalRequest.bookAppointment
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#x27;/g, "'");
-        setTargetUrl(decodedUrl);
-      } else if (
-        originalRequest.cancelAppointment &&
-        savedStudentId &&
-        savedSessionToken
-      ) {
-        const { date, time, id, schoolId } = originalRequest.cancelAppointment;
-        setTargetUrl(
-          `https://ta.yrdsb.ca/live/students/bookAppointment.php?dt=${date}&tm=${time}&id=${id}&school_id=${schoolId}&action=cancel`
-        );
-      } else if (
-        originalRequest.submitAppointmentForm &&
-        savedStudentId &&
-        savedSessionToken
-      ) {
-        setTargetUrl("FORM_SUBMIT");
-      } else {
-        throw new Error("No valid request to retry");
-      }
-    } catch (error) {
-      console.error("taauth: Error retrying request:", error);
-      onError?.(`Failed to retry request: ${error}`);
-      setIsReauthenticating(false);
-      onLoadingChange?.(false);
-    }
-  };
-
-  // Setup timeout
-  const setupTimeout = () => {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-
-    const timeout = setTimeout(handleTimeout, 2000);
-    setTimeoutId(timeout);
-  };
-
-  // initialize everything; look at props and decide which path to put to setTarget
   useEffect(() => {
-    const initializeFetcher = async () => {
-      onLoadingChange?.(true);
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-      // get user and pass
-      const savedStudentId = await SecureStorage.load("ta_student_id");
-      const savedSessionToken = await SecureStorage.load("ta_session_token");
+  useEffect(() => {
+    let cancelled = false;
 
-      // check for main courses page html first if not logging in
-      if (
-        !loginParams &&
-        !fetchCourseUrl &&
-        !getGuidance &&
-        !bookAppointment &&
-        !submitAppointmentForm &&
-        !cancelAppointment
-      ) {
-        const cachedMainHtml = await SecureStorage.load("ta_courses");
-        if (cachedMainHtml) {
-          onResult(cachedMainHtml);
-          onLoadingChange?.(false);
-          return;
-        }
+    const safeOnResult = (result: string) => {
+      if (!cancelled && isMountedRef.current) {
+        onResult(result);
       }
+    };
 
-      if (loginParams) {
-        // init login with username and password
-        console.log("taauth: starting login");
-        const { username, password } = loginParams;
-        const encodedUsername = encodeURIComponent(username);
-        const encodedPassword = encodeURIComponent(password);
+    const safeOnError = (error: string) => {
+      if (!cancelled && isMountedRef.current) {
+        onError?.(error);
+      }
+    };
 
-        // example login
-        if (encodedPassword === "password" && encodedUsername === "123456789") {
-          await SecureStorage.save("ta_username", loginParams.username);
-          await SecureStorage.save("ta_password", loginParams.password);
-          await SecureStorage.save("ta_student_id", "");
-          await SecureStorage.save("ta_session_token", "");
-          await SecureStorage.save(
-            "ta_courses",
-            `[
+    const safeOnLoading = (loading: boolean) => {
+      if (!cancelled && isMountedRef.current) {
+        onLoadingChange?.(loading);
+      }
+    };
+
+    const loginAndStore = async (
+      username: string,
+      password: string,
+      shouldPrefetch: boolean
+    ): Promise<{ success: boolean; error?: string }> => {
+      const encodedUsername = encodeURIComponent(username);
+      const encodedPassword = encodeURIComponent(password);
+
+      // example login
+      if (encodedPassword === "password" && encodedUsername === "123456789") {
+        await SecureStorage.save("ta_username", username);
+        await SecureStorage.save("ta_password", password);
+        await SecureStorage.save("ta_student_id", "");
+        await SecureStorage.save("ta_session_token", "");
+        await SecureStorage.save(
+          "ta_courses",
+          `[
   {
-    "courseCode": "ENG4U1-7",
+    "courseCode": "ENG2D1",
     "courseName": "English",
     "block": "1",
     "room": "41",
     "startDate": "2025-09-02",
     "semester": 1,
     "endDate": "2026-01-29",
+    "grade": "96",
+    "midtermMark": "94",
+    "hasGrade": true
+  },
+  {
+    "courseCode": "CHC2D1",
+    "courseName": "Canadian History Since WW2",
+    "block": "2",
+    "room": "76",
+    "startDate": "2025-09-02",
+    "semester": 1,
+    "endDate": "2026-01-29",
+    "grade": "97",
+    "hasGrade": true
+
+  },
+  {
+    "courseCode": "LUNCH",
+    "courseName": "Lunch",
+    "block": "3",
+    "room": "CAFE",
+    "startDate": "2025-09-02",
+    "semester": 1,
+    "endDate": "2026-01-29",
+    "hasGrade": false
+  },
+  {
+    "courseCode": "ICD2O1",
+    "courseName": "Digital Technology",
+    "block": "4",
+    "room": "114",
+    "startDate": "2025-09-02",
+    "semester": 1,
+    "endDate": "2026-01-29",
     "grade": "93",
     "hasGrade": true
+  },
+  {
+    "courseCode": "BBI2O1",
+    "courseName": "Introduction to Business",
+    "block": "5",
+    "room": "137",
+    "startDate": "2025-09-02",
+    "semester": 1,
+    "endDate": "2026-01-29",
+    "grade": "92",
+    "hasGrade": true
   }
-]`
+]
+`
+        );
+        await SecureStorage.save("school_id", "0");
+        await SecureStorage.save("school_name", "Example School");
+        return { success: true };
+      }
+
+      const loginUrl = `${INDEX_URL}&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
+      const { html } = await fetchHtmlWithCookies(loginUrl);
+
+      if (html.toLowerCase().includes("log in")) {
+        return {
+          success: false,
+          error:
+            "Login Failed: Please check your student ID and password and try again.",
+        };
+      }
+
+      if (!html.toLowerCase().includes("student reports")) {
+        return {
+          success: false,
+          error: "Login Failed: Unexpected content. Contact support!",
+        };
+      }
+
+      const coursesHtmlString: string = parseStudentGrades(html);
+      const schoolId = html.match(/school_id=(\d+)/)?.[1] ?? null;
+
+      const cookieSession = await syncStoredSessionFromCookies();
+      const studentId =
+        cookieSession.studentId ?? extractStudentIdFromHtml(html);
+      const sessionToken =
+        cookieSession.sessionToken ?? extractSessionTokenFromHtml(html);
+
+      if (studentId && studentId !== cookieSession.studentId) {
+        await SecureStorage.save("ta_student_id", studentId);
+      }
+      if (sessionToken && sessionToken !== cookieSession.sessionToken) {
+        await SecureStorage.save("ta_session_token", sessionToken);
+      }
+
+      if (!schoolId) {
+        return {
+          success: false,
+          error: "Login Failed: Unexpected content. Contact support!",
+        };
+      }
+
+      if (!sessionToken) {
+        console.warn(
+          "taauth: Login succeeded but session cookies were unreadable; continuing with best-effort session state."
+        );
+      }
+
+      await SecureStorage.save("ta_username", username);
+      await SecureStorage.save("ta_password", password);
+      await SecureStorage.save("ta_courses", coursesHtmlString);
+      await SecureStorage.save("school_id", schoolId);
+      await fetchSchoolName(schoolId);
+
+      if (shouldPrefetch) {
+        await prefetchCourseReports(coursesHtmlString);
+      }
+
+      return { success: true };
+    };
+
+    const fetchHtmlWithAutoReauth = async (
+      url: string,
+      init?: RequestInit
+    ): Promise<{ html: string; reauthed: boolean }> => {
+      const first = await fetchHtmlWithCookies(url, init);
+      if (!first.html.toLowerCase().includes("log in")) {
+        return { html: first.html, reauthed: false };
+      }
+
+      const savedUsername = await SecureStorage.load("ta_username");
+      const savedPassword = await SecureStorage.load("ta_password");
+
+      if (!savedUsername || !savedPassword) {
+        return { html: first.html, reauthed: false };
+      }
+
+      const reauthResult = await loginAndStore(
+        savedUsername,
+        savedPassword,
+        false
+      );
+      if (!reauthResult.success) {
+        return { html: first.html, reauthed: false };
+      }
+
+      const retry = await fetchHtmlWithCookies(url, init);
+      return { html: retry.html, reauthed: true };
+    };
+
+    const run = async () => {
+      const hasRequest = Boolean(
+        loginParams ||
+        fetchCourseUrl ||
+        fetchWithCookies ||
+        getGuidance ||
+        bookAppointment ||
+        submitAppointmentForm ||
+        cancelAppointment
+      );
+
+      if (!hasRequest) return;
+
+      safeOnLoading(true);
+
+      try {
+        if (loginParams) {
+          console.log("taauth: starting login");
+          const result = await loginAndStore(
+            loginParams.username,
+            loginParams.password,
+            Boolean(prefetchCourses)
           );
-          await SecureStorage.save("school_id", "0");
-          await SecureStorage.save("school_name", "Example School");
-          onLoadingChange?.(false);
-          onResult("Login Success");
-        } else {
-          const url = `https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
-          setTargetUrl(url);
+
+          if (!result.success) {
+            safeOnResult(result.error ?? "Login Failed: Unknown error.");
+          } else {
+            safeOnResult("Login Success");
+          }
+          return;
         }
-      } else if (fetchCourseUrl) {
-        console.log(`taauth: Fetching specific course URL: ${fetchCourseUrl}`);
-        setTargetUrl(fetchCourseUrl);
-        setupTimeout();
-      } else if (fetchWithCookies && savedStudentId && savedSessionToken) {
-        // fallback to main courses page if no specific URL provided
-        console.log("taauth: Fetching main courses page with cookies");
-        const url = `https://ta.yrdsb.ca/live/index.php?subject_id=0`;
-        setTargetUrl(url);
-        setupTimeout();
-      } else if (getGuidance && savedStudentId && savedSessionToken) {
-        const savedSchoolId = await SecureStorage.load("school_id");
-        if (savedSchoolId) {
-          // changed to use localdate instead of iso; canada gets screwed
+
+        if (fetchCourseUrl) {
+          console.log(
+            `taauth: Fetching specific course URL: ${fetchCourseUrl}`
+          );
+          const { html } = await fetchHtmlWithAutoReauth(fetchCourseUrl);
+          if (html.toLowerCase().includes("log in")) {
+            safeOnResult("Login Failed: Session expired or invalid cookies.");
+          } else {
+            console.log("taauth: Course HTML fetched successfully from URL");
+            safeOnResult(html);
+          }
+          return;
+        }
+
+        if (fetchWithCookies) {
+          console.log("taauth: Fetching main courses page with cookies");
+          const { html } = await fetchHtmlWithAutoReauth(INDEX_URL);
+
+          if (html.toLowerCase().includes("log in")) {
+            safeOnResult("Login Failed: Session expired or invalid cookies.");
+            return;
+          }
+
+          if (
+            prefetchCourses &&
+            html.toLowerCase().includes("student reports")
+          ) {
+            try {
+              const coursesJsonString = parseStudentGrades(html);
+              await SecureStorage.save("ta_courses", coursesJsonString);
+
+              const schoolIdFromHtml = html.match(/school_id=(\d+)/)?.[1];
+              if (schoolIdFromHtml) {
+                await SecureStorage.save("school_id", schoolIdFromHtml);
+              }
+
+              await prefetchCourseReports(coursesJsonString);
+            } catch {
+              // fall through and just return the HTML
+            }
+          }
+
+          safeOnResult(html);
+          console.log("taauth: html fetched successfully with cookies");
+          return;
+        }
+
+        if (getGuidance) {
+          const savedStudentId = await SecureStorage.load("ta_student_id");
+          const savedSchoolId = await SecureStorage.load("school_id");
+
+          if (!savedStudentId || !savedSchoolId) {
+            safeOnResult(
+              "Retrieval failed: Session expired or invalid cookies."
+            );
+            return;
+          }
+
           const formatDateForAPI = (date: Date): string => {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -481,344 +774,122 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           const guidanceDate = formatDateForAPI(getGuidance);
           console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
           const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`;
-          setTargetUrl(url);
-          setupTimeout();
-        } else {
-          const errorMsg = "No School ID found";
-          console.log(errorMsg);
-          onError?.(errorMsg);
-          onLoadingChange?.(false);
-        }
-      } else if (bookAppointment && savedStudentId && savedSessionToken) {
-        // fixes url
-        const decodedUrl = bookAppointment
-          .replace(/&amp;/g, "&")
-          .replace(/&lt;/g, "<")
-          .replace(/&gt;/g, ">")
-          .replace(/&quot;/g, '"')
-          .replace(/&#x27;/g, "'");
 
-        console.log(`taauth: Booking appointment with URL: ${decodedUrl}`);
-        setTargetUrl(decodedUrl);
-        setupTimeout();
-      } else if (cancelAppointment && savedStudentId && savedSessionToken) {
-        const { date, time, id, schoolId } = cancelAppointment;
-        const cancelUrl = `https://ta.yrdsb.ca/live/students/bookAppointment.php?dt=${date}&tm=${time}&id=${id}&school_id=${schoolId}&action=cancel`;
-        console.log(`taauth: Canceling appointment with URL: ${cancelUrl}`);
-        setTargetUrl(cancelUrl);
-        setupTimeout();
-      } else if (submitAppointmentForm && savedStudentId && savedSessionToken) {
-        // webview has POST
-        // TODO: use a smarter way of interfacing w/ ta
-        console.log("taauth: Submitting appointment form data");
-        setTargetUrl("FORM_SUBMIT"); // special marker for form submission
-        setupTimeout();
-      } else {
-        const errorMessage = "invalid parameters or no saved session";
-        console.error(errorMessage);
-        onError?.(errorMessage);
-        onLoadingChange?.(false);
-      }
-    };
-
-    initializeFetcher();
-  }, [
-    loginParams,
-    fetchWithCookies,
-    fetchCourseUrl,
-    getGuidance,
-    bookAppointment,
-    submitAppointmentForm,
-    cancelAppointment,
-    onResult,
-    onError,
-    onLoadingChange,
-  ]);
-
-  // clean timeout on component unmount
-  useEffect(() => {
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [timeoutId]);
-
-  const getInjectedJavaScript = () => {
-    // IMPORTANT:
-    // - document.cookie can throw SecurityError on Android in some contexts (e.g., about:blank / redirect frames).
-    // - We do NOT want that to become a fatal error. Cookies are best-effort.
-    return `
-      (function() {
-        var html = "";
-        var cookies = "";
-        try {
-          html = document.documentElement ? document.documentElement.outerHTML : "";
-        } catch (e) {
-          html = "";
-        }
-
-        try {
-          cookies = document.cookie || "";
-        } catch (e) {
-          // Access denied in some WebView contexts; treat as "no readable cookies", NOT an error.
-          cookies = "";
-        }
-
-        try {
-          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'htmlAndCookies', html: html, cookies: cookies }));
-        } catch (e) {
-          // If even postMessage fails, there's nothing useful we can do.
-        }
-      })();
-    `;
-  };
-
-  // check if has form that needs to be filled
-  const isAppointmentForm = (html: string): boolean => {
-    return (
-      html.includes('name="reason"') &&
-      html.includes('type="radio"') &&
-      html.includes("Submit Reason")
-    );
-  };
-
-  // the webview has fetched whatever html was requested, handle it here
-  const handleMessage = async (event: WebViewMessageEvent) => {
-    try {
-      // clear on response recieved
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-        setTimeoutId(null);
-      }
-
-      const message: WebViewDataMessage = JSON.parse(event.nativeEvent.data);
-
-      // If we ever get an injected "error" message, do NOT kill the whole flow.
-      // It’s almost always a transient WebView context issue.
-      if (message.type === "error") {
-        console.warn("taauth: Non-fatal injected error:", message.data);
-        return;
-      }
-
-      if (message.type === "htmlAndCookies") {
-        const html = message.html ?? "";
-        const cookies = message.cookies ?? "";
-
-        // Guard: ignore empty/near-empty payloads from intermediate documents (about:blank etc.)
-        // This avoids accidentally parsing garbage and "succeeding" with nonsense.
-        if (html.trim().length < 50) {
-          console.log(
-            "taauth: Ignoring tiny HTML payload (likely intermediate)"
-          );
+          const { html } = await fetchHtmlWithAutoReauth(url);
+          if (html.toLowerCase().includes("log in")) {
+            safeOnResult(
+              "Retrieval failed: Session expired or invalid cookies."
+            );
+          } else if (html.includes("NOT A SCHOOL DAY")) {
+            safeOnResult("NOT A SCHOOL DAY");
+          } else {
+            safeOnResult(html);
+            console.log("taauth: guidance html fetched successfully");
+          }
           return;
         }
 
-        // Re-auth flow: after a timeout we intentionally navigate through login again.
-        if (
-          isReauthenticating &&
-          html.toLowerCase().includes("student reports")
-        ) {
-          console.log("taauth: reauth WORKED updating session...");
+        if (bookAppointment) {
+          console.log("taauth: Processing appointment booking response");
+          const cleanedUrl = decodeHtmlEntities(bookAppointment);
+          const { html } = await fetchHtmlWithAutoReauth(cleanedUrl);
 
-          const coursesHtmlString: string = parseStudentGrades(html);
-          const schoolId = html.match(/school_id=(\d+)/)?.[1];
-
-          // Cookies might be unreadable (""), so extraction must be resilient.
-          const cookiePairs =
-            cookies.length > 0
-              ? cookies.split("; ").map((c) => c.split("="))
-              : [];
-
-          const studentId =
-            cookiePairs.find((pair) => pair[0] === "student_id")?.[1] || null;
-          const sessionToken =
-            cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
-            null;
-
-          // If cookies were unreadable via JS, we may not have studentId/sessionToken here.
-          // In that case: DON'T overwrite existing stored cookies with nulls; just treat reauth as "page refreshed".
-          if (schoolId) {
-            await SecureStorage.save("ta_courses", coursesHtmlString);
-            await SecureStorage.save("school_id", schoolId);
-          }
-
-          if (studentId && sessionToken) {
-            await SecureStorage.save("ta_student_id", studentId);
-            await SecureStorage.save("ta_session_token", sessionToken);
-            await SecureStorage.save("ta_cookies", cookies);
-          } else {
-            console.warn(
-              "taauth: Reauth reached Student Reports but JS couldn't read cookies (expected sometimes on Android). Keeping existing stored session cookies."
-            );
-          }
-
-          const originalRequest = originalRequestRef.current;
-          const shouldShowAppointmentRefreshNotice = Boolean(
-            originalRequest?.getGuidance ||
-            originalRequest?.bookAppointment ||
-            originalRequest?.submitAppointmentForm ||
-            originalRequest?.cancelAppointment
-          );
-
-          setIsReauthenticating(false);
-          onLoadingChange?.(false);
-
-          if (shouldShowAppointmentRefreshNotice) {
-            originalRequestRef.current = null;
-            onResult(html);
+          if (html.toLowerCase().includes("log in")) {
+            safeOnResult("Booking Failed: Session expired or invalid cookies.");
             return;
           }
 
-          await retryOriginalRequest();
-          originalRequestRef.current = null;
-          onResult("REAUTH SUCCESS");
+          if (html.toLowerCase().includes("cancel")) {
+            console.log("taauth: appointment booking successful");
+            const appointmentDetails = extractAppointmentFromUrl(cleanedUrl);
+            const savedSchoolId = await SecureStorage.load("school_id");
+
+            await saveAppointmentData({
+              ...appointmentDetails,
+              schoolId: savedSchoolId || appointmentDetails.schoolId,
+              reason: "Guidance Appointment",
+              teacher: appointmentMeta?.teacher,
+              subject: appointmentMeta?.subject,
+            });
+
+            safeOnResult("Appointment booked successfully!");
+            return;
+          }
+
+          if (isAppointmentForm(html)) {
+            console.log("taauth: appointment form detected, needs user input");
+            safeOnResult(html);
+            return;
+          }
+
+          console.log(
+            "taauth: appointment booking failed - unexpected response"
+          );
+          safeOnResult("Failed to book appointment. Please try again.");
           return;
         }
 
-        if (isReauthenticating && !html.toLowerCase().includes("log in")) {
-          setIsReauthenticating(false);
-          originalRequestRef.current = null;
-        }
-
-        // only for init logins
-        if (loginParams) {
-          if (html.toLowerCase().includes("log in")) {
-            onResult(
-              "Login Failed: Please check your student ID and password and try again."
-            );
-          } else if (html.toLowerCase().includes("student reports")) {
-            console.log("taauth: Login successful.");
-
-            const coursesHtmlString: string = parseStudentGrades(html);
-
-            // school id for guidance
-            const schoolId = html.match(/school_id=(\d+)/)?.[1];
-
-            const cookiePairs =
-              cookies.length > 0
-                ? cookies.split("; ").map((c) => c.split("="))
-                : [];
-
-            const studentId =
-              cookiePairs.find((pair) => pair[0] === "student_id")?.[1] || null;
-            const sessionToken =
-              cookiePairs.find((pair) => pair[0] === "session_token")?.[1] ||
-              null;
-
-            if (studentId && sessionToken && schoolId) {
-              // save everything
-              await SecureStorage.save("ta_username", loginParams.username);
-              await SecureStorage.save("ta_password", loginParams.password);
-              await SecureStorage.save("ta_student_id", studentId);
-              await SecureStorage.save("ta_session_token", sessionToken);
-              await SecureStorage.save("ta_courses", coursesHtmlString);
-              await SecureStorage.save("school_id", schoolId);
-              await SecureStorage.save("ta_cookies", cookies);
-              await fetchSchoolName(schoolId);
-
-              onLoadingChange?.(false);
-              onResult("Login Success");
-            } else {
-              onLoadingChange?.(false);
-              onResult(
-                "Login Failed: Could not find required cookies (webview might be) cookie access may be blocked)."
-              );
-            }
-          } else {
-            onResult("Login Failed: Unexpected content. Contact support!");
-          }
-        } else if (fetchCourseUrl) {
-          if (html.toLowerCase().includes("log in")) {
-            onResult("Login Failed: Session expired or invalid cookies.");
-          } else {
-            console.log("taauth: Course HTML fetched successfully from URL");
-            onResult(html);
-          }
-        } else if (fetchWithCookies) {
-          if (html.toLowerCase().includes("log in")) {
-            onResult("Login Failed: Session expired or invalid cookies.");
-          } else {
-            onResult(html);
-            console.log("taauth: html fetched successfully with cookies");
-          }
-        } else if (getGuidance) {
-          if (html.toLowerCase().includes("log in")) {
-            onResult("Retrieval failed: Session expired or invalid cookies.");
-          } else if (html.includes("NOT A SCHOOL DAY")) {
-            onResult("NOT A SCHOOL DAY");
-          } else {
-            onResult(html);
-            console.log("taauth: guidance html fetched successfully");
-          }
-        } else if (bookAppointment) {
-          console.log("taauth: Processing appointment booking response");
-          if (html.toLowerCase().includes("log in")) {
-            onResult("Booking Failed: Session expired or invalid cookies.");
-          } else if (html.toLowerCase().includes("cancel")) {
-            console.log("taauth: appointment booking successful");
-
-            // extract appointment details and save them
-            if (bookAppointment) {
-              const appointmentDetails =
-                extractAppointmentFromUrl(bookAppointment);
-              const savedSchoolId = await SecureStorage.load("school_id");
-
-              await saveAppointmentData({
-                ...appointmentDetails,
-                schoolId: savedSchoolId || appointmentDetails.schoolId,
-                reason: "Guidance Appointment",
-              });
-            }
-
-            onResult("Appointment booked successfully!");
-          } else if (isAppointmentForm(html)) {
-            console.log("taauth: appointment form detected, needs user input");
-            onResult(html);
-          } else {
-            console.log(
-              "taauth: appointment booking failed - unexpected response"
-            );
-            onResult("Failed to book appointment. Please try again.");
-          }
-        } else if (cancelAppointment) {
+        if (cancelAppointment) {
           console.log("taauth: Processing appointment cancellation response");
+          const { date, time, id, schoolId } = cancelAppointment;
+          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?dt=${date}&tm=${time}&id=${id}&school_id=${schoolId}&action=cancel`;
+
+          const { html } = await fetchHtmlWithAutoReauth(url);
+
           if (html.toLowerCase().includes("log in")) {
-            onResult(
+            safeOnResult(
               "Cancellation failed: Session expired or invalid cookies."
             );
-          } else if (
+            return;
+          }
+
+          if (
             html.toLowerCase().includes("cancelled") ||
             html.toLowerCase().includes("canceled")
           ) {
             console.log("taauth: appointment cancelled successfully");
-
-            // remove appointment from saved data
-            if (cancelAppointment.id) {
-              await removeAppointmentData(cancelAppointment.id);
+            if (id) {
+              await removeAppointmentData(id);
             }
-
-            onResult("Appointment cancelled successfully!");
-          } else {
-            // ta doesnt give conf so remove from storage
-            if (cancelAppointment.id) {
-              await removeAppointmentData(cancelAppointment.id);
-            }
-            onResult("Appointment successfully processed.");
+            safeOnResult("Appointment cancelled successfully!");
+            return;
           }
-        } else if (submitAppointmentForm) {
+
+          if (id) {
+            await removeAppointmentData(id);
+          }
+
+          safeOnResult("Appointment successfully processed.");
+          return;
+        }
+
+        if (submitAppointmentForm) {
           console.log("taauth: Processing form submission response");
+          const formDataString = createFormDataString(submitAppointmentForm);
+          const { html } = await fetchHtmlWithAutoReauth(
+            "https://ta.yrdsb.ca/live/students/bookAppointment.php",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
+              body: formDataString,
+            }
+          );
+
           if (html.toLowerCase().includes("log in")) {
-            onResult(
+            safeOnResult(
               "Form submission failed: Session expired or invalid cookies."
             );
-          } else if (
+            return;
+          }
+
+          if (
             html.toLowerCase().includes("cancel") ||
             html.toLowerCase().includes("booked")
           ) {
             console.log("taauth: appointment form submitted successfully");
 
-            // save appt data when submitted form
             if (submitAppointmentForm.hiddenFields) {
               const appointmentDetails = {
                 date:
@@ -831,167 +902,63 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
                   Date.now().toString(),
                 schoolId: submitAppointmentForm.hiddenFields.school_id || "",
                 reason: submitAppointmentForm.reason || "Guidance Appointment",
+                teacher: appointmentMeta?.teacher,
+                subject:
+                  submitAppointmentForm.reasonLabel ?? appointmentMeta?.subject,
               };
 
               await saveAppointmentData(appointmentDetails);
             }
 
-            onResult("Appointment booked successfully!");
-          } else if (
+            safeOnResult("Appointment booked successfully!");
+            return;
+          }
+
+          if (
             html.toLowerCase().includes("error") ||
             html.toLowerCase().includes("failed")
           ) {
             console.log("taauth: form submission failed");
-            onResult("Failed to submit appointment form. Please try again.");
-          } else {
-            // assume success if no error indicator
-            console.log("taauth: form submission completed");
-            onResult("Appointment request submitted successfully!");
+            safeOnResult(
+              "Failed to submit appointment form. Please try again."
+            );
+            return;
           }
+
+          console.log("taauth: form submission completed");
+          safeOnResult("Appointment request submitted successfully!");
+          return;
         }
+      } catch (error: any) {
+        console.error("taauth: Error processing request:", error);
+        safeOnError(`taauth: Error processing data: ${error.toString()}`);
+        safeOnResult("Operation Failed: Internal Error");
+      } finally {
+        safeOnLoading(false);
       }
-    } catch (error: any) {
-      console.error(
-        "taauth: Error parsing WebView message or processing data:",
-        error
-      );
-      onError?.(`taauth: Error processing data: ${error.toString()}`);
-      onResult("Operation Failed: Internal Error");
-    } finally {
-      if (!isReauthenticating) {
-        onLoadingChange?.(false);
-      }
-    }
-  };
+    };
 
-  const handleLoadEnd = () => {
-    console.log("taauth: WebView onLoadEnd triggered");
-    if (webviewRef.current) {
-      console.log("taauth: Injecting JavaScript...");
-      webviewRef.current.injectJavaScript(getInjectedJavaScript());
-    } else {
-      console.log("taauth: WebView ref is null!");
-    }
-  };
+    run();
 
-  const handleLoadStart = () => {
-    console.log("taauth: WebView onLoadStart triggered for URL:", targetUrl);
-  };
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    loginParams,
+    fetchWithCookies,
+    prefetchCourses,
+    fetchCourseUrl,
+    getGuidance,
+    bookAppointment,
+    submitAppointmentForm,
+    appointmentMeta,
+    cancelAppointment,
+    onResult,
+    onError,
+    onLoadingChange,
+  ]);
 
-  const handleWebViewError = (syntheticEvent: any) => {
-    const { nativeEvent } = syntheticEvent;
-    console.error("taauth: WebView error:", nativeEvent);
-    console.error(
-      "taauth: Error details:",
-      JSON.stringify(nativeEvent, null, 2)
-    );
-
-    // clear timeout on error
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      setTimeoutId(null);
-    }
-
-    onError?.(`WebView error: ${nativeEvent.description || "Unknown error"}`);
-    onLoadingChange?.(false);
-  };
-
-  // for form submissions, use webview native post capability
-  if (submitAppointmentForm && targetUrl === "FORM_SUBMIT") {
-    const formDataString = createFormDataString(
-      isReauthenticating
-        ? originalRequestRef.current?.submitAppointmentForm ||
-            submitAppointmentForm
-        : submitAppointmentForm
-    );
-
-    return (
-      <View style={styles.hiddenWebViewContainer}>
-        <WebView
-          ref={webviewRef}
-          source={{
-            uri: "https://ta.yrdsb.ca/live/students/bookAppointment.php",
-            method: "POST",
-            headers: {
-              "Content-Type": "application/x-www-form-urlencoded",
-            },
-            body: formDataString,
-          }}
-          onLoadStart={handleLoadStart}
-          onLoadEnd={handleLoadEnd}
-          onMessage={handleMessage}
-          javaScriptEnabled={true}
-          domStorageEnabled={true}
-          style={styles.hiddenWebView}
-          sharedCookiesEnabled={true}
-          thirdPartyCookiesEnabled={true}
-          onError={(syntheticEvent) => {
-            const { nativeEvent } = syntheticEvent;
-            console.error("taauth: WebView navigation error:", nativeEvent);
-
-            if (timeoutId) {
-              clearTimeout(timeoutId);
-              setTimeoutId(null);
-            }
-
-            onError?.(
-              `taauth: WebView navigation error: ${nativeEvent.description}`
-            );
-            onResult(
-              "Failed to reach TeachAssist servers! Check your internet and try again."
-            );
-            onLoadingChange?.(false);
-          }}
-        />
-      </View>
-    );
-  }
-
-  if (!targetUrl) {
-    return null;
-  }
-
-  return (
-    <View style={styles.hiddenWebViewContainer}>
-      <WebView
-        ref={webviewRef}
-        source={{ uri: targetUrl }}
-        onLoadStart={handleLoadStart}
-        onLoadEnd={handleLoadEnd}
-        onMessage={handleMessage}
-        javaScriptEnabled={true}
-        domStorageEnabled={true}
-        style={styles.hiddenWebView}
-        sharedCookiesEnabled={true}
-        thirdPartyCookiesEnabled={true}
-        onError={handleWebViewError}
-        onLoadProgress={(event) => {
-          console.log("taauth: Load progress:", event.nativeEvent.progress);
-        }}
-        onHttpError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          console.log(
-            "taauth: HTTP error:",
-            nativeEvent.statusCode,
-            nativeEvent.description
-          );
-        }}
-      />
-    </View>
-  );
+  return null;
 };
-
-// hide webview
-const styles = StyleSheet.create({
-  hiddenWebViewContainer: {
-    width: 0,
-    height: 0,
-    position: "absolute",
-    opacity: 0,
-  },
-  hiddenWebView: {
-    flex: 1,
-  },
-});
 
 export default TeachAssistAuthFetcher;

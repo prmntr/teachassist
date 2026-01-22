@@ -30,20 +30,20 @@ TeachAssist provides students with an open source streamlined mobile experience 
 ## Features
 
 ### Current Features
-- 📱 **Mobile-Optimized Interface** - Clean, intuitive design built specifically for mobile devices
 - 📊 **Grade Tracking** - View current marks and performance across all classes
 - 📅 **Appointment Booking** - Book, view, and cancel guidance appointments directly from the app
+- 🔔 **Notifications** - Get notified when your marks change and guidance appointments
 - 📈 **Trend Analysis** - Track your progress over time with detailed analytics
 - 🔮 **Performance Prediction** - Add and edit assignments to forecast course performance
 - 📝 **Assignment Feedback** - Access teacher feedback on individual assignments
-- 🔐 **Secure Login** - End-to-end encryption with YRDSB credentials
+- 📱 **Mobile-Optimized Interface** - Clean, intuitive design built specifically for mobile devices
+- 🔐 **Privacy Features** - End-to-end encryption with YRDSB credentials, plus options to restrict and lock who sees your grades
 - ⚡ **Fast Performance** - Quick access to your academic data
 
 ### Coming Soon
-- 🔔 **Notifications** - Get notified when your marks change
-- ⏹️ **Widgets** - See your marks at a glance, without ever opening the app
-- 🧑‍💻 **API** - Interface with the TeachAssist website through code, requests, and websockets
-- 🍎 **iOS Support** - TeachAssist, but brought to the iDevices
+- ⏹️ **Widgets** - See your marks at a glance without ever opening the app
+- 🧑‍💻 **API** - Interface with the TeachAssist website through code
+- 🍎 **iOS Support** - Support for Apple devices
 
 ## Screenshots
 
@@ -140,4 +140,4 @@ This project is licensed under the MIT License - see the [LICENCE](LICENCE) file
 
 ---
 
-**Made with ☕📜**
+**Made with ☕,📜 & 🧋**

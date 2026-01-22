@@ -11,13 +11,13 @@ import {
 type SnowEffectProps = {
   /** Number of flakes on screen at once */
   count?: number;
-  /** Controls overall speed. Higher = faster. */
+  /** Controls overall speed. Higher = faster */
   speed?: number;
   /** If true, stops animations */
   paused?: boolean;
   /** Optional style for the absolute overlay container */
   style?: ViewStyle;
-  /** Flake color (defaults to white). You can also set slightly blue-ish for “icy” snow. */
+  /** Flake color (defaults to white*/
   color?: string;
   /** Min/max flake size in px */
   sizeRange?: [number, number];

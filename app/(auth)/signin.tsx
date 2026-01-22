@@ -3,15 +3,15 @@ import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import TeachAssistAuthFetcher from "../(auth)/taauth";
-import { useTheme } from "../contexts/ThemeContext";
 import BackButton from "../(components)/Back";
+import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 // Sign in screen
 
 const SignInScreen = () => {
@@ -27,12 +27,12 @@ const SignInScreen = () => {
   const handleLogin = () => {
     if (username === "" || password === "") {
       setMessage("Please enter a student ID and password.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      hapticsNotification(Haptics.NotificationFeedbackType.Error);
       return;
     } else if (!/^\d+$/.test(username)) {
       // regex i stole, check for numbers and at least 1 number
       setMessage("Username must be a number.");
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      hapticsNotification(Haptics.NotificationFeedbackType.Error);
       return;
     }
     setMessage("");
@@ -42,11 +42,11 @@ const SignInScreen = () => {
   // get what was returned from TeachAssistAuthFetcher's onResult prop
   const handleAuthResult = (result: string) => {
     if (result === "Login Success") {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      hapticsNotification(Haptics.NotificationFeedbackType.Success);
       router.replace("/courses");
     } else {
       // use the setMessage from before
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      hapticsNotification(Haptics.NotificationFeedbackType.Error);
       setMessage(result);
       setIsLoading(false);
     }
@@ -69,11 +69,11 @@ const SignInScreen = () => {
     <View
       className={`flex-1 justify-center items-center ${isDark ? "bg-dark1" : "bg-light1"} px-6`}
     >
-      <BackButton path={"/messages"} />
+      <BackButton path={"/onboarding"} />
       <Text
-        className={`text-4xl font-bold ${isDark ? "text-appwhite" : "text-appblack"} mb-2 text-center`}
+        className={`text-4xl font-light ${isDark ? "text-appwhite" : "text-appblack"} mb-2 text-center`}
       >
-        Sign in to <Text className={`text-baccent`}>TeachAssist</Text>
+        Sign in to <Text className={`text-baccent font-bold`}>TeachAssist</Text>
       </Text>
       {/* conditional render */}
       {message ? (
@@ -98,6 +98,8 @@ const SignInScreen = () => {
       <TextInput
         className={`w-full ${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded-lg px-4 py-4 mb-4`}
         placeholder="Password"
+        autoCapitalize="none"
+        autoCorrect={false}
         placeholderTextColor="#a1a1aa"
         secureTextEntry
         value={password}
@@ -130,7 +132,7 @@ const SignInScreen = () => {
         disabled={isLoading}
         className={`w-full bg-baccent text-center rounded-lg px-4 py-2 mb-3`}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           handleLogin();
         }}
       >
@@ -144,7 +146,7 @@ const SignInScreen = () => {
       <TouchableOpacity
         className={`text-2xl text-center rounded-lg`}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           Alert.alert(
             "Try these steps",
             `1. Try disabling your VPN; TeachAssist is only available to YRDSB students with an IP in Canada; we're working on a fix.\n\n2. Check your internet connection.\n\n3. Check the play store for any updates.`
@@ -165,6 +167,7 @@ const SignInScreen = () => {
       {isLoading && message === "" && (
         <TeachAssistAuthFetcher
           loginParams={{ username, password }}
+          prefetchCourses
           onResult={handleAuthResult}
           onError={onError}
           onLoadingChange={onLoadingChange}

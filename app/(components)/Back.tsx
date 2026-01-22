@@ -2,6 +2,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { Image, Text, TouchableOpacity } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact } from "../(utils)/haptics";
 
 interface BackProps {
   path: string;
@@ -13,7 +14,7 @@ const BackButton: React.FC<BackProps> = ({ path }) => {
     <TouchableOpacity
       className={`absolute top-15 left-5 flex flex-row items-center z-50 gap-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-4 py-2 shadow-md`}
       onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
         router.replace(path as any);
       }}
     >

@@ -2,6 +2,7 @@ import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
 import { useTheme } from "../contexts/ThemeContext";
+import { hapticsImpact } from "../(utils)/haptics";
 
 // no one should ever see this
 
@@ -11,7 +12,7 @@ const Error = () => {
   const { isDark } = useTheme();
 
   const handleGoToCourses = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
     router.push("/courses");
   };
 
@@ -103,9 +104,7 @@ const Error = () => {
             className={`bg-success/20 rounded-xl p-4`}
           >
             <View className={`flex-row justify-center items-center`}>
-              <Text className={`text-success text-lg font-bold`}>
-                Courses
-              </Text>
+              <Text className={`text-success text-lg font-bold`}>Courses</Text>
             </View>
           </TouchableOpacity>
         </View>

@@ -1,96 +1,229 @@
-import { useMemo } from "react";
-import { Text, View } from "react-native";
+import * as Haptics from "expo-haptics";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Image,
+  ImageBackground,
+  Modal,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import AnimatedProgressWheel from "react-native-progress-wheel";
 import { useTheme } from "../contexts/ThemeContext";
 import { Course } from "./CourseParser";
+import { hapticsImpact } from "../(utils)/haptics";
 
 interface CourseInfoBoxProps {
   course: Course; // pass the course directly instead of loading it
+  hideMarksUntilTap?: boolean;
 }
 
 interface DisplayCourse {
   courseName: string;
   courseCode: string;
   courseMark: string;
+  currentMark: string | null;
+  midtermMark: string | null;
   block: string;
   room: string;
-  termMark: string | null;
   semester: number;
   hasGrade: boolean;
 }
 
-export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
+const isNumericMark = (mark: string): boolean =>
+  /^\d+(\.\d+)?%?$/.test(mark.trim());
+
+const getCurrentMark = (course: Course): string | null => {
+  if (!course.hasGrade) return null;
+  if (!course.grade || course.grade === "See teacher") return null;
+  if (!isNumericMark(course.grade)) return null;
+  return course.grade.trim();
+};
+
+export const CourseInfoBox = ({
+  course,
+  hideMarksUntilTap = false,
+}: CourseInfoBoxProps) => {
   const { isDark } = useTheme();
+  const [revealCourseMark, setRevealCourseMark] = useState(false);
+  const [revealMidtermMark, setRevealMidtermMark] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const displayCourse = useMemo((): DisplayCourse => {
+    const currentMark = getCurrentMark(course);
+    const midtermMark = course.midtermMark ?? null;
+    const hasGrade = Boolean(currentMark);
+    const courseMark = currentMark ?? "N/A";
+
     // change course to displaycourse
     return {
       courseName: course.courseName,
       courseCode: course.courseCode,
-      courseMark:
-        course.hasGrade && course.grade !== "See teacher"
-          ? course.grade
-          : "N/A",
-      termMark: null, // The parser doesn't extract term marks, only final grades
+      courseMark,
+      currentMark,
+      midtermMark,
       block: course.block,
       room: course.room,
       semester: course.semester,
-      hasGrade: course.hasGrade,
+      hasGrade,
     };
   }, [course]);
 
+  useEffect(() => {
+    if (hideMarksUntilTap) {
+      setRevealCourseMark(false);
+      setRevealMidtermMark(false);
+    }
+  }, [hideMarksUntilTap, displayCourse.courseMark, displayCourse.midtermMark]);
+
+  const showCourseMark = !hideMarksUntilTap || revealCourseMark;
+  const showMidtermMark = !hideMarksUntilTap || revealMidtermMark;
+  const hasOnlyMidterm = Boolean(
+    displayCourse.midtermMark && !displayCourse.currentMark,
+  );
+  const showStaleIndicator = Boolean(course.isGradeStale || hasOnlyMidterm);
+
   // No course found or no grade available
-  if (
-    !displayCourse ||
-    (!displayCourse.hasGrade && displayCourse.courseMark === "See teacher")
-  ) {
+  if (!displayCourse || !displayCourse.hasGrade) {
     return (
       <View
-        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 mb-6 shadow-md w-full`}
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 w-full relative overflow-hidden`}
       >
-        <View className={`mb-2`}>
+        <Modal visible={showInfo} transparent animationType="slide">
+          <View className="flex-1 bg-black/50 items-center justify-center px-4">
+            <View
+              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6 w-full max-w-md`}
+            >
+              <View className="flex items-center mb-6">
+                <Image
+                  source={require("../../assets/images/cobweb-book.png")}
+                  className="w-56 h-29 object-contain"
+                ></Image>
+              </View>
+              <View className="flex-row items-center mb-4">
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+                >
+                  Stale Grades
+                </Text>
+              </View>
+              <Text
+                className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
+              >
+                From time to time, teachers may choose to hide courses from
+                students, preventing them from checking their marks. The
+                TeachAssist app attempts to store the last known version of the
+                course, allowing you to check your grades.
+                {`\n\n`}
+                <Text className="font-semibold text-baccent">
+                  Note: Your mark and assignments may not reflect the most up to
+                  date version.
+                </Text>
+              </Text>
+              <TouchableOpacity
+                className={`mt-2 ${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-lg p-3`}
+                onPress={() => {
+                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                  setShowInfo(false);
+                }}
+              >
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium text-center`}
+                >
+                  Got it
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        <ImageBackground
+          source={
+            isDark
+              ? require("../../assets/images/striped_bg.png")
+              : require("../../assets/images/striped_bg_white.png")
+          }
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 0,
+          }}
+          resizeMode="cover"
+        />
+        {showStaleIndicator && (
+          <TouchableOpacity
+            className="absolute top-5 right-4"
+            style={{ zIndex: 2 }}
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+            onPress={() => {
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+              setShowInfo(true);
+            }}
+          >
+            <View
+              className={`bg-caution rounded-full pl-3 pr-2 pt-2 pb-3 shadow-md`}
+            ></View>
+          </TouchableOpacity>
+        )}
+        <View style={{ zIndex: 1 }}>
           <View className={`flex-row items-center justify-start`}>
             <View className={`w-2 h-2 bg-gray-400 rounded-full mr-2`} />
             <Text
-              className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm`}
+              className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm`}
             >
-              Grades Not Available
+              Grade Not Available
             </Text>
           </View>
           <Text
-            className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold mb-1`}
+            className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-2xl font-bold mb-1`}
           >
             {displayCourse?.courseName || "Course Not Found"}
           </Text>
           {displayCourse && (
             <Text
-              className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm mb-2`}
+              className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm `}
             >
               {displayCourse.courseCode} • Semester {displayCourse.semester}
             </Text>
           )}
-        </View>
-
-        <View className={`flex-row justify-center items-center`}>
-          <View className={`flex-1`}>
-            <View
-              className={`bg-gray-500/20 rounded-lg p-4`}
+          {displayCourse?.midtermMark && (
+            <TouchableOpacity
+              activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+              onPress={() => {
+                if (!hideMarksUntilTap) return;
+                setRevealMidtermMark((prev) => !prev);
+              }}
+              disabled={!hideMarksUntilTap}
             >
-              <Text
-                className={`text-gray-400/80 text-sm font-medium mb-1 text-center`}
-              >
-                Current Status
-              </Text>
-              <Text className={`text-gray-400 text-lg font-medium text-center`}>
-                Please see teacher for current status regarding achievement in
-                this course
-              </Text>
-            </View>
-          </View>
+              {showMidtermMark ? (
+                <View
+                  className={`bg-baccent/90 rounded-lg px-3 py-1 mt-3`}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  <Text className={`text-appblack text-sm font-medium`}>
+                    Midterm {displayCourse.midtermMark}%
+                  </Text>
+                </View>
+              ) : (
+                <View
+                  className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1 mt-3`}
+                  style={{ alignSelf: "flex-start" }}
+                >
+                  <Text
+                    className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
+                  >
+                    Tap to reveal midterm
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     );
   }
-  
+
   const getPerformanceStatus = (mark: string): string => {
     const numericMark = parseFloat(mark.replace("%", ""));
     if (isNaN(numericMark)) {
@@ -102,7 +235,7 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
       }
       return "No Grade Available Yet";
     }
-    if(numericMark === 0) return "No Mark Available Yet"; // all formatives
+    if (numericMark === 0) return "No Mark Available Yet"; // all formatives
     if (numericMark >= 100) return "Perfect Performance";
     if (numericMark >= 90) return "Excellent Performance";
     if (numericMark >= 80) return "Strong Performance";
@@ -113,16 +246,27 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
 
   return (
     <View
-      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 shadow-md w-full flex-row items-center justify-between flex-wrap`}
+      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 shadow-md w-full flex-row items-center justify-between flex-wrap relative`}
     >
+      {course.isGradeStale && (
+        <View className="absolute top-3 right-3 z-500">
+          <View className="bg-caution/80 rounded-full w-6 h-6 items-center justify-center shadow-md">
+            <Text className="text-appwhite text-xs font-bold">!</Text>
+          </View>
+        </View>
+      )}
       <View className={`flex-1 min-w-0 pr-4`}>
-        <View className={`flex-row items-center justify-start mb-1`}>
-          <View className={`w-2 h-2 bg-baccent rounded-full mr-2`} />
-          <Text
-            className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-normal`}
-          >
-            {getPerformanceStatus(displayCourse.courseMark)}
-          </Text>
+        <View className={`flex-row items-center justify-between mb-1`}>
+          <View className="flex-row items-center">
+            <View className={`w-2 h-2 bg-baccent rounded-full mr-2`} />
+            <Text
+              className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-normal`}
+            >
+              {showCourseMark
+                ? getPerformanceStatus(displayCourse.courseMark)
+                : "Mark has been hidden"}
+            </Text>
+          </View>
         </View>
         <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
           Period {displayCourse.block}
@@ -135,57 +279,101 @@ export const CourseInfoBox = ({ course }: CourseInfoBoxProps) => {
         <Text className={`text-baccent/90 text-lg`}>
           {displayCourse.courseCode} • Room {displayCourse.room}
         </Text>
-        {displayCourse.termMark &&
-          (() => {
-            return (
+        {displayCourse.midtermMark && (
+          <TouchableOpacity
+            activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+            onPress={() => {
+              if (!hideMarksUntilTap) return;
+              setRevealMidtermMark((prev) => !prev);
+            }}
+            disabled={!hideMarksUntilTap}
+          >
+            {showMidtermMark ? (
               <View
-                className={`bg-success/20 rounded-lg px-3 py-1 mt-1`}
+                className={`bg-baccent/90 rounded-lg px-3 py-1 mt-2`}
                 style={{ alignSelf: "flex-start" }}
               >
-                <Text className={`text-success/80 text-sm font-medium`}>
-                  Term Mark: {displayCourse.courseMark}
+                <Text className={`text-appblack text-sm font-medium`}>
+                  Midterm {displayCourse.midtermMark}%
                 </Text>
               </View>
-            );
-          })()}
+            ) : (
+              <View
+                className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1 mt-2`}
+                style={{ alignSelf: "flex-start" }}
+              >
+                <Text
+                  className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
+                >
+                  Tap to reveal midterm
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
       </View>
 
       <View className={`flex-row justify-end items-end flex-shrink-0`}>
         <View>
           {(() => {
             const mark = parseFloat(displayCourse.courseMark);
-            console.log(mark)
-            return !isNaN(mark) ? (
-              <View className="items-center justify-center">
-                <AnimatedProgressWheel
-                  size={90}
-                  width={10}
-                  color={mark >= 50 ? "#2faf7f" : "#d6363f"}
-                  backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                  progress={mark === 999 ? NaN : mark}
-                  max={100}
-                  rounded={true}
-                  rotation={"-90deg"}
-                  duration={400}
-                  delay={75}
-                  // label is bad
-                  showProgressLabel={false}
-                />
+            console.log(mark);
+            if (isNaN(mark)) {
+              return null;
+            }
 
-                <View className="absolute">
-                  <Text
-                    style={{
-                      color: mark >= 50 ? "#2faf7f" : "#d6363f",
-                      fontSize: 17,
-                      fontWeight: "600",
-                    }}
+            return (
+              <TouchableOpacity
+                activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+                onPress={() => {
+                  if (!hideMarksUntilTap) return;
+                  setRevealCourseMark((prev) => !prev);
+                }}
+                disabled={!hideMarksUntilTap}
+              >
+                {showCourseMark ? (
+                  <View className="items-center justify-center">
+                    <AnimatedProgressWheel
+                      size={90}
+                      width={10}
+                      color={mark >= 50 ? "#2faf7f" : "#d6363f"}
+                      backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                      progress={mark === 999 ? NaN : mark}
+                      max={100}
+                      rounded={true}
+                      rotation={"-90deg"}
+                      duration={400}
+                      delay={75}
+                      // label is bad
+                      showProgressLabel={false}
+                    />
+
+                    <View className="absolute">
+                      <Text
+                        style={{
+                          color: mark >= 50 ? "#2faf7f" : "#d6363f",
+                          fontSize: 17,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {mark.toFixed(1)}%{/* TA only has up to 1 */}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View
+                    className={`${isDark ? "bg-dark4 " : "bg-light4 "} items-center justify-center`}
+                    style={{ width: 90, height: 90, borderRadius: 999 }}
                   >
-                    {mark.toFixed(1)}%
-                    {/* TA only has up to 1 */}
-                  </Text>
-                </View>
-              </View>
-            ) : null;
+                    <Text
+                      className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm text-center font-semibold pt-2`}
+                    >
+                      Tap to reveal average
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
           })()}
         </View>
       </View>
@@ -197,12 +385,14 @@ interface QuickCourseProps {
   courses: Course[];
   courseCode?: string;
   subjectId?: string;
+  hideMarksUntilTap?: boolean;
 }
 
 export const QuickCourse = ({
   courses,
   courseCode,
   subjectId,
+  hideMarksUntilTap,
 }: QuickCourseProps) => {
   const { isDark } = useTheme();
   const selectedCourse = useMemo((): Course | null => {
@@ -218,11 +408,14 @@ export const QuickCourse = ({
       targetCourse = courses.find((course) => course.subjectId === subjectId);
     } else {
       // if no specific course requested, find the first course with a grade
-      targetCourse = courses.find(
-        (course) => course.hasGrade && course.grade !== "See teacher"
-      );
+      targetCourse = courses.find((course) => Boolean(getCurrentMark(course)));
 
-      // If no course with grades, just take the first one
+      // If no current grade is visible, try a midterm mark
+      if (!targetCourse) {
+        targetCourse = courses.find((course) => Boolean(course.midtermMark));
+      }
+
+      // If no course with marks, just take the first one
       if (!targetCourse) {
         targetCourse = courses[0];
       }
@@ -245,7 +438,12 @@ export const QuickCourse = ({
     );
   }
 
-  return <CourseInfoBox course={selectedCourse} />;
+  return (
+    <CourseInfoBox
+      course={selectedCourse}
+      hideMarksUntilTap={hideMarksUntilTap}
+    />
+  );
 };
 
 export default CourseInfoBox;
