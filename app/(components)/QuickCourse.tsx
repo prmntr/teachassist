@@ -9,9 +9,9 @@ import {
   View,
 } from "react-native";
 import AnimatedProgressWheel from "react-native-progress-wheel";
+import { hapticsImpact } from "../(utils)/haptics";
 import { useTheme } from "../contexts/ThemeContext";
 import { Course } from "./CourseParser";
-import { hapticsImpact } from "../(utils)/haptics";
 
 interface CourseInfoBoxProps {
   course: Course; // pass the course directly instead of loading it
@@ -24,6 +24,7 @@ interface DisplayCourse {
   courseMark: string;
   currentMark: string | null;
   midtermMark: string | null;
+  finalMark: string | null;
   block: string;
   room: string;
   semester: number;
@@ -47,10 +48,12 @@ export const CourseInfoBox = ({
   const { isDark } = useTheme();
   const [revealCourseMark, setRevealCourseMark] = useState(false);
   const [revealMidtermMark, setRevealMidtermMark] = useState(false);
+  const [revealFinalMark, setRevealFinalMark] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const displayCourse = useMemo((): DisplayCourse => {
     const currentMark = getCurrentMark(course);
     const midtermMark = course.midtermMark ?? null;
+    const finalMark = course.finalMark ?? null;
     const hasGrade = Boolean(currentMark);
     const courseMark = currentMark ?? "N/A";
 
@@ -61,6 +64,7 @@ export const CourseInfoBox = ({
       courseMark,
       currentMark,
       midtermMark,
+      finalMark,
       block: course.block,
       room: course.room,
       semester: course.semester,
@@ -72,155 +76,210 @@ export const CourseInfoBox = ({
     if (hideMarksUntilTap) {
       setRevealCourseMark(false);
       setRevealMidtermMark(false);
+      setRevealFinalMark(false);
     }
-  }, [hideMarksUntilTap, displayCourse.courseMark, displayCourse.midtermMark]);
+  }, [
+    hideMarksUntilTap,
+    displayCourse.courseMark,
+    displayCourse.midtermMark,
+    displayCourse.finalMark,
+  ]);
 
   const showCourseMark = !hideMarksUntilTap || revealCourseMark;
   const showMidtermMark = !hideMarksUntilTap || revealMidtermMark;
+  const showFinalMark = !hideMarksUntilTap || revealFinalMark;
   const hasOnlyMidterm = Boolean(
-    displayCourse.midtermMark && !displayCourse.currentMark,
+    displayCourse.midtermMark &&
+    !displayCourse.currentMark &&
+    !displayCourse.finalMark,
   );
   const showStaleIndicator = Boolean(course.isGradeStale || hasOnlyMidterm);
+
+  const staleInfoModal = (
+    <Modal visible={showInfo} transparent animationType="slide">
+      <View className="flex-1 bg-black/50 items-center justify-center px-4">
+        <View
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6 w-full max-w-md`}
+        >
+          <View className="flex items-center mb-6">
+            <Image
+              source={require("../../assets/images/cobweb-book.png")}
+              className="w-56 h-29 object-contain"
+            ></Image>
+          </View>
+          <View className="flex-row items-center mb-4">
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+            >
+              Stale Grades
+            </Text>
+          </View>
+          <Text
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
+          >
+            From time to time, teachers may choose to hide courses from
+            students, preventing them from checking their marks. The TeachAssist
+            app attempts to store the last known version of the course, allowing
+            you to check your grades.
+            {`\n\n`}
+            <Text className="font-semibold text-baccent">
+              Note: Your mark and assignments may not reflect the most up to
+              date version.
+            </Text>
+          </Text>
+          <TouchableOpacity
+            className={`mt-2 ${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-lg p-3`}
+            onPress={() => {
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+              setShowInfo(false);
+            }}
+          >
+            <Text
+              className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium text-center`}
+            >
+              Got it
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   // No course found or no grade available
   if (!displayCourse || !displayCourse.hasGrade) {
     return (
-      <View
-        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 w-full relative overflow-hidden`}
-      >
-        <Modal visible={showInfo} transparent animationType="slide">
-          <View className="flex-1 bg-black/50 items-center justify-center px-4">
-            <View
-              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6 w-full max-w-md`}
-            >
-              <View className="flex items-center mb-6">
-                <Image
-                  source={require("../../assets/images/cobweb-book.png")}
-                  className="w-56 h-29 object-contain"
-                ></Image>
-              </View>
-              <View className="flex-row items-center mb-4">
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
-                >
-                  Stale Grades
-                </Text>
-              </View>
-              <Text
-                className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
-              >
-                From time to time, teachers may choose to hide courses from
-                students, preventing them from checking their marks. The
-                TeachAssist app attempts to store the last known version of the
-                course, allowing you to check your grades.
-                {`\n\n`}
-                <Text className="font-semibold text-baccent">
-                  Note: Your mark and assignments may not reflect the most up to
-                  date version.
-                </Text>
-              </Text>
-              <TouchableOpacity
-                className={`mt-2 ${isDark ? "bg-baccent/80" : "bg-baccent"} rounded-lg p-3`}
-                onPress={() => {
-                  hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-                  setShowInfo(false);
-                }}
-              >
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium text-center`}
-                >
-                  Got it
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-        <ImageBackground
-          source={
-            isDark
-              ? require("../../assets/images/striped_bg.png")
-              : require("../../assets/images/striped_bg_white.png")
-          }
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 0,
-          }}
-          resizeMode="cover"
-        />
-        {showStaleIndicator && (
-          <TouchableOpacity
-            className="absolute top-5 right-4"
-            style={{ zIndex: 2 }}
-            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
-            onPress={() => {
-              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-              setShowInfo(true);
+      <>
+        {staleInfoModal}
+        <View
+          className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 w-full relative overflow-hidden`}
+        >
+          <ImageBackground
+            source={
+              isDark
+                ? require("../../assets/images/striped_bg.png")
+                : require("../../assets/images/striped_bg_white.png")
+            }
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 0,
+              opacity: isDark ? 1 : 0.3,
             }}
-          >
-            <View
-              className={`bg-caution rounded-full pl-3 pr-2 pt-2 pb-3 shadow-md`}
-            ></View>
-          </TouchableOpacity>
-        )}
-        <View style={{ zIndex: 1 }}>
-          <View className={`flex-row items-center justify-start`}>
-            <View className={`w-2 h-2 bg-gray-400 rounded-full mr-2`} />
-            <Text
-              className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm`}
-            >
-              Grade Not Available
-            </Text>
-          </View>
-          <Text
-            className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-2xl font-bold mb-1`}
-          >
-            {displayCourse?.courseName || "Course Not Found"}
-          </Text>
-          {displayCourse && (
-            <Text
-              className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm `}
-            >
-              {displayCourse.courseCode} • Semester {displayCourse.semester}
-            </Text>
-          )}
-          {displayCourse?.midtermMark && (
+            resizeMode="cover"
+          />
+          {showStaleIndicator && (
             <TouchableOpacity
-              activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+              className="absolute top-5 right-4"
+              style={{ zIndex: 2 }}
+              hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
               onPress={() => {
-                if (!hideMarksUntilTap) return;
-                setRevealMidtermMark((prev) => !prev);
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                setShowInfo(true);
               }}
-              disabled={!hideMarksUntilTap}
             >
-              {showMidtermMark ? (
-                <View
-                  className={`bg-baccent/90 rounded-lg px-3 py-1 mt-3`}
-                  style={{ alignSelf: "flex-start" }}
-                >
-                  <Text className={`text-appblack text-sm font-medium`}>
-                    Midterm {displayCourse.midtermMark}%
-                  </Text>
-                </View>
-              ) : (
-                <View
-                  className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1 mt-3`}
-                  style={{ alignSelf: "flex-start" }}
-                >
-                  <Text
-                    className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
-                  >
-                    Tap to reveal midterm
-                  </Text>
-                </View>
-              )}
+              <View
+                className={`bg-caution rounded-full pl-3 pr-2 pt-2 pb-3 shadow-md`}
+              ></View>
             </TouchableOpacity>
           )}
+          <View style={{ zIndex: 1 }}>
+            <View className={`flex-row items-center justify-start`}>
+              <View className={`w-2 h-2 bg-gray-400 rounded-full mr-2`} />
+              <Text
+                className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm`}
+              >
+                Grade Not Available
+              </Text>
+            </View>
+            <Text
+              className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-2xl font-bold mb-1`}
+            >
+              {displayCourse?.courseName || "Course Not Found"}
+            </Text>
+            {displayCourse && (
+              <Text
+                className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm `}
+              >
+                {displayCourse.courseCode} • Semester {displayCourse.semester}
+              </Text>
+            )}
+            {(displayCourse?.midtermMark || displayCourse?.finalMark) && (
+              <View className="flex-row items-center mt-3">
+                {displayCourse?.midtermMark && (
+                  <TouchableOpacity
+                    activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+                    onPress={() => {
+                      if (!hideMarksUntilTap) return;
+                      setRevealMidtermMark((prev) => !prev);
+                    }}
+                    disabled={!hideMarksUntilTap}
+                    className="mr-2"
+                  >
+                    {showMidtermMark ? (
+                      <View
+                        className={`bg-baccent/90 rounded-lg px-3 py-1`}
+                        style={{ alignSelf: "flex-start" }}
+                      >
+                        <Text className={`text-appblack text-sm font-medium`}>
+                          Midterm {displayCourse.midtermMark}%
+                        </Text>
+                      </View>
+                    ) : (
+                      <View
+                        className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1`}
+                        style={{ alignSelf: "flex-start" }}
+                      >
+                        <Text
+                          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
+                          numberOfLines={1}
+                        >
+                          Reveal midterm
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+                {displayCourse?.finalMark && (
+                  <TouchableOpacity
+                    activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+                    onPress={() => {
+                      if (!hideMarksUntilTap) return;
+                      setRevealFinalMark((prev) => !prev);
+                    }}
+                    disabled={!hideMarksUntilTap}
+                  >
+                    {showFinalMark ? (
+                      <View
+                        className={`bg-success/90 rounded-lg px-3 py-1`}
+                        style={{ alignSelf: "flex-start" }}
+                      >
+                        <Text className={`text-appblack text-sm font-medium`}>
+                          Final {displayCourse.finalMark}%
+                        </Text>
+                      </View>
+                    ) : (
+                      <View
+                        className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1`}
+                        style={{ alignSelf: "flex-start" }}
+                      >
+                        <Text
+                          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
+                          numberOfLines={1}
+                        >
+                          Reveal final
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
         </View>
-      </View>
+      </>
     );
   }
 
@@ -245,139 +304,188 @@ export const CourseInfoBox = ({
   };
 
   return (
-    <View
-      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 shadow-md w-full flex-row items-center justify-between flex-wrap relative`}
-    >
-      {course.isGradeStale && (
-        <View className="absolute top-3 right-3 z-500">
-          <View className="bg-caution/80 rounded-full w-6 h-6 items-center justify-center shadow-md">
-            <Text className="text-appwhite text-xs font-bold">!</Text>
-          </View>
-        </View>
-      )}
-      <View className={`flex-1 min-w-0 pr-4`}>
-        <View className={`flex-row items-center justify-between mb-1`}>
-          <View className="flex-row items-center">
-            <View className={`w-2 h-2 bg-baccent rounded-full mr-2`} />
-            <Text
-              className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-normal`}
-            >
-              {showCourseMark
-                ? getPerformanceStatus(displayCourse.courseMark)
-                : "Mark has been hidden"}
-            </Text>
-          </View>
-        </View>
-        <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
-          Period {displayCourse.block}
-        </Text>
-        <Text
-          className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold`}
-        >
-          {displayCourse.courseName}
-        </Text>
-        <Text className={`text-baccent/90 text-lg`}>
-          {displayCourse.courseCode} • Room {displayCourse.room}
-        </Text>
-        {displayCourse.midtermMark && (
+    <>
+      {staleInfoModal}
+      <View
+        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 shadow-md w-full flex-row items-center justify-between flex-wrap relative`}
+      >
+        {course.isGradeStale && (
           <TouchableOpacity
-            activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+            className="absolute top-3 right-3 z-500"
+            hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
             onPress={() => {
-              if (!hideMarksUntilTap) return;
-              setRevealMidtermMark((prev) => !prev);
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+              setShowInfo(true);
             }}
-            disabled={!hideMarksUntilTap}
           >
-            {showMidtermMark ? (
-              <View
-                className={`bg-baccent/90 rounded-lg px-3 py-1 mt-2`}
-                style={{ alignSelf: "flex-start" }}
-              >
-                <Text className={`text-appblack text-sm font-medium`}>
-                  Midterm {displayCourse.midtermMark}%
-                </Text>
-              </View>
-            ) : (
-              <View
-                className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1 mt-2`}
-                style={{ alignSelf: "flex-start" }}
-              >
-                <Text
-                  className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
-                >
-                  Tap to reveal midterm
-                </Text>
-              </View>
-            )}
+            <View
+              className={`bg-caution rounded-full pl-3 pr-2 pt-2 pb-3 shadow-md`}
+            ></View>
           </TouchableOpacity>
         )}
-      </View>
-
-      <View className={`flex-row justify-end items-end flex-shrink-0`}>
-        <View>
-          {(() => {
-            const mark = parseFloat(displayCourse.courseMark);
-            console.log(mark);
-            if (isNaN(mark)) {
-              return null;
-            }
-
-            return (
-              <TouchableOpacity
-                activeOpacity={hideMarksUntilTap ? 0.75 : 1}
-                onPress={() => {
-                  if (!hideMarksUntilTap) return;
-                  setRevealCourseMark((prev) => !prev);
-                }}
-                disabled={!hideMarksUntilTap}
+        <View className={`flex-1 min-w-0 pr-4`}>
+          <View className={`flex-row items-center justify-between mb-1`}>
+            <View className="flex-row items-center">
+              <View className={`w-2 h-2 bg-baccent rounded-full mr-2`} />
+              <Text
+                className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-normal`}
               >
-                {showCourseMark ? (
-                  <View className="items-center justify-center">
-                    <AnimatedProgressWheel
-                      size={90}
-                      width={10}
-                      color={mark >= 50 ? "#2faf7f" : "#d6363f"}
-                      backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                      progress={mark === 999 ? NaN : mark}
-                      max={100}
-                      rounded={true}
-                      rotation={"-90deg"}
-                      duration={400}
-                      delay={75}
-                      // label is bad
-                      showProgressLabel={false}
-                    />
-
-                    <View className="absolute">
-                      <Text
-                        style={{
-                          color: mark >= 50 ? "#2faf7f" : "#d6363f",
-                          fontSize: 17,
-                          fontWeight: "600",
-                        }}
-                      >
-                        {mark.toFixed(1)}%{/* TA only has up to 1 */}
+                {showCourseMark
+                  ? getPerformanceStatus(displayCourse.courseMark)
+                  : "Mark has been hidden"}
+              </Text>
+            </View>
+          </View>
+          <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
+            Period {displayCourse.block}
+          </Text>
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold`}
+          >
+            {displayCourse.courseName}
+          </Text>
+          <Text className={`text-baccent/90 text-lg`}>
+            {displayCourse.courseCode} • Room {displayCourse.room}
+          </Text>
+          {(displayCourse.midtermMark || displayCourse.finalMark) && (
+            <View className="flex-row items-center mt-2">
+              {displayCourse.midtermMark && (
+                <TouchableOpacity
+                  activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+                  onPress={() => {
+                    if (!hideMarksUntilTap) return;
+                    setRevealMidtermMark((prev) => !prev);
+                  }}
+                  disabled={!hideMarksUntilTap}
+                  className="mr-2"
+                >
+                  {showMidtermMark ? (
+                    <View
+                      className={`bg-baccent/90 rounded-lg px-3 py-1`}
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      <Text className={`text-appblack text-sm font-medium`}>
+                        Midterm {displayCourse.midtermMark}%
                       </Text>
                     </View>
-                  </View>
-                ) : (
-                  <View
-                    className={`${isDark ? "bg-dark4 " : "bg-light4 "} items-center justify-center`}
-                    style={{ width: 90, height: 90, borderRadius: 999 }}
-                  >
-                    <Text
-                      className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm text-center font-semibold pt-2`}
+                  ) : (
+                    <View
+                      className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1`}
+                      style={{ alignSelf: "flex-start" }}
                     >
-                      Tap to reveal average
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })()}
+                      <Text
+                        className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
+                        numberOfLines={1}
+                      >
+                        Reveal midterm
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+              {displayCourse.finalMark && (
+                <TouchableOpacity
+                  activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+                  onPress={() => {
+                    if (!hideMarksUntilTap) return;
+                    setRevealFinalMark((prev) => !prev);
+                  }}
+                  disabled={!hideMarksUntilTap}
+                >
+                  {showFinalMark ? (
+                    <View
+                      className={`bg-success/90 rounded-lg px-3 py-1`}
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      <Text className={`text-appblack text-sm font-medium`}>
+                        Final {displayCourse.finalMark}%
+                      </Text>
+                    </View>
+                  ) : (
+                    <View
+                      className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-3 py-1`}
+                      style={{ alignSelf: "flex-start" }}
+                    >
+                      <Text
+                        className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm font-medium`}
+                        numberOfLines={1}
+                      >
+                        Reveal final
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+        </View>
+
+        <View className={`flex-row justify-end items-end flex-shrink-0`}>
+          <View>
+            {(() => {
+              const mark = parseFloat(displayCourse.courseMark);
+              console.log(mark);
+              if (isNaN(mark)) {
+                return null;
+              }
+
+              return (
+                <TouchableOpacity
+                  activeOpacity={hideMarksUntilTap ? 0.75 : 1}
+                  onPress={() => {
+                    if (!hideMarksUntilTap) return;
+                    setRevealCourseMark((prev) => !prev);
+                  }}
+                  disabled={!hideMarksUntilTap}
+                >
+                  {showCourseMark ? (
+                    <View className="items-center justify-center">
+                      <AnimatedProgressWheel
+                        size={90}
+                        width={10}
+                        color={mark >= 50 ? "#2faf7f" : "#d6363f"}
+                        backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                        progress={mark === 999 ? NaN : mark}
+                        max={100}
+                        rounded={true}
+                        rotation={"-90deg"}
+                        duration={400}
+                        delay={75}
+                        // label is bad
+                        showProgressLabel={false}
+                      />
+
+                      <View className="absolute">
+                        <Text
+                          style={{
+                            color: mark >= 50 ? "#2faf7f" : "#d6363f",
+                            fontSize: 17,
+                            fontWeight: "600",
+                          }}
+                        >
+                          {mark.toFixed(1)}%{/* TA only has up to 1 */}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : (
+                    <View
+                      className={`${isDark ? "bg-dark4 " : "bg-light4 "} items-center justify-center`}
+                      style={{ width: 90, height: 90, borderRadius: 999 }}
+                    >
+                      <Text
+                        className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm text-center font-semibold pt-2`}
+                      >
+                        Tap to reveal average
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })()}
+          </View>
         </View>
       </View>
-    </View>
+    </>
   );
 };
 
@@ -410,7 +518,10 @@ export const QuickCourse = ({
       // if no specific course requested, find the first course with a grade
       targetCourse = courses.find((course) => Boolean(getCurrentMark(course)));
 
-      // If no current grade is visible, try a midterm mark
+      // If no current grade is visible, try a final or midterm mark
+      if (!targetCourse) {
+        targetCourse = courses.find((course) => Boolean(course.finalMark));
+      }
       if (!targetCourse) {
         targetCourse = courses.find((course) => Boolean(course.midtermMark));
       }

@@ -13,6 +13,7 @@ interface Course {
   endDate: string;
   grade: string;
   midtermMark?: string | null;
+  finalMark?: string | null;
   hasGrade: boolean;
   semester: number;
   subjectId?: string;
@@ -281,6 +282,10 @@ function parseGradeInfo(
   const midtermMatch = text.match(/MIDTERM MARK:\s*(\d+\.?\d*)%/i);
   if (midtermMatch) {
     course.midtermMark = midtermMatch[1];
+  }
+  const finalMatch = text.match(/FINAL MARK:\s*(\d+\.?\d*)%/i);
+  if (finalMatch) {
+    course.finalMark = finalMatch[1];
   }
   if (gradeSubjectId) {
     course.subjectId = gradeSubjectId;

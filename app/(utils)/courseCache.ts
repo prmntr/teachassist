@@ -11,9 +11,8 @@ const buildCourseCodeKey = (course: Course): string =>
   `code:${course.courseCode}-sem:${course.semester}`;
 
 const hasVisibleGrade = (course: Course): boolean => {
-  if (!course.hasGrade) return false;
-  if (!course.grade) return false;
-  return course.grade !== "See teacher";
+  if (course.grade && course.grade !== "See teacher") return true;
+  return Boolean(course.finalMark);
 };
 
 const findCachedMatch = (
@@ -64,6 +63,9 @@ export const mergeCoursesWithCache = (
     }
     if (!merged.midtermMark && cachedCourse.midtermMark) {
       merged.midtermMark = cachedCourse.midtermMark;
+    }
+    if (!merged.finalMark && cachedCourse.finalMark) {
+      merged.finalMark = cachedCourse.finalMark;
     }
 
     const freshHasGrade = hasVisibleGrade(freshCourse);

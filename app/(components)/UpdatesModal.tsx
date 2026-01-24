@@ -30,7 +30,7 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.3.0",
+  version = "1.3.1",
   updates,
   username,
 }) => {
@@ -73,13 +73,18 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
       },
       {
         type: "new",
-        title: "Midterm Grades",
-        description: "View your midterm marks from the courses tab",
+        title: "Midterm and Final Grades",
+        description: "View your midterm and final marks from the courses tab",
       },
       {
         type: "improved",
         title: "Revamped Analytics",
         description: "See past numerical averages,\nplus a cleaned up design",
+      },
+      {
+        type: "new",
+        title: "Hidden Grade Viewing",
+        description: "See grades your teacher has hidden, indicated by a yellow circle",
       },
       {
         type: "new",

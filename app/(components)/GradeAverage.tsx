@@ -12,7 +12,7 @@ interface GradeStats {
   currentAverage: number;
   previousAverage: number | null;
   courseCount: number;
-  lastUpdated: string;
+  lastRetrieved: string | null;
   trend: "up" | "down" | "same" | "new";
 }
 
@@ -21,6 +21,7 @@ interface GradeAverageTrackerProps {
   showCourseCount?: boolean;
   showLastUpdated?: boolean;
   hideMarksUntilTap?: boolean;
+  refreshToken?: string;
 }
 
 const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
@@ -28,6 +29,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
   showCourseCount = true,
   showLastUpdated = false,
   hideMarksUntilTap = false,
+  refreshToken,
 }) => {
   const { isDark } = useTheme();
 
@@ -141,6 +143,20 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         currentAverage = 0.0;
       }
 
+      let lastRetrieved: string | null = null;
+      try {
+        lastRetrieved = await SecureStorage.load("marks_last_retrieved");
+      } catch {
+        // no last retrieved time exists
+      }
+      if (!lastRetrieved) {
+        try {
+          lastRetrieved = await SecureStorage.load("grade_last_updated");
+        } catch {
+          // no legacy last updated exists
+        }
+      }
+
       // Replace the problematic section with this fixed version:
 
       // Load the last known current average (to detect actual changes)
@@ -188,10 +204,6 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           "grade_last_known_average",
           currentAverage.toString()
         );
-        await SecureStorage.save(
-          "grade_last_updated",
-          new Date().toISOString()
-        );
       }
 
       // Handle first-time setup
@@ -200,10 +212,6 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
           "grade_last_known_average",
           currentAverage.toString()
         );
-        await SecureStorage.save(
-          "grade_last_updated",
-          new Date().toISOString()
-        );
       }
 
       // so we save the rn average as last avg
@@ -211,20 +219,11 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
       // Only update previous average when there's actually a change
       if (previousAverage !== null && previousAverage !== currentAverage) {
         // Keep the old previousAverage, don't overwrite it with currentAverage
-        // Only update timestamps
-        await SecureStorage.save(
-          "grade_last_updated",
-          new Date().toISOString()
-        );
       } else if (previousAverage === null) {
         // First time setup
         await SecureStorage.save(
           "grade_previous_average",
           currentAverage.toString()
-        );
-        await SecureStorage.save(
-          "grade_last_updated",
-          new Date().toISOString()
         );
       }
       // so we save the rn average as last avg
@@ -240,7 +239,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         currentAverage,
         previousAverage,
         courseCount: gradedCourseCount,
-        lastUpdated: new Date().toISOString(),
+        lastRetrieved,
         trend: determineGradeTrend(currentAverage, previousAverage),
       };
 
@@ -257,7 +256,7 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
 
   useEffect(() => {
     updateGradeAverage();
-  }, []);
+  }, [refreshToken]);
 
   if (loading) {
     return (
@@ -391,8 +390,10 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
             >
-              Last updated{" "}
-              {new Date(gradeStats.lastUpdated).toLocaleTimeString()}
+              Last retrieved{" "}
+              {gradeStats.lastRetrieved
+                ? new Date(gradeStats.lastRetrieved).toLocaleTimeString()
+                : "N/A"}
             </Text>
           )}
         </View>
