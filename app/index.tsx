@@ -213,6 +213,7 @@ const InitialRoute = () => {
               unofficial client for yrdsb
             </Text>
           </View>
+          {/* 
           <Text
             className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg text-center mt-10 font-light leading-10`}
           >
@@ -220,6 +221,7 @@ const InitialRoute = () => {
             <Text className="">get notified</Text>
             {`\n`}stay ahead
           </Text>
+          */}
         </View>
         <View className={`w-full`}>
           {/* 
@@ -245,7 +247,7 @@ const InitialRoute = () => {
             }}
           >
             <View
-              className={`bg-baccent/90 px-5 py-3 rounded-xl shadow-lg flex-row items-center justify-center`}
+              className={`bg-baccent/50 px-5 py-3 rounded-xl shadow-lg flex-row items-center justify-center`}
             >
               <Text
                 className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
@@ -260,7 +262,7 @@ const InitialRoute = () => {
             </View>
           </TouchableOpacity>
           <Text className={`text-baccent text-lg mt-6 text-center`}>
-            Version 1.3.0
+            Version 1.3.1
           </Text>
         </View>
       </View>

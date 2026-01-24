@@ -1,5 +1,5 @@
 import { Link } from "expo-router";
-import { Text, View } from "react-native";
+import { Text, View, Image } from "react-native";
 import { useTheme } from "./contexts/ThemeContext";
 
 const Guidance = () => {
@@ -51,7 +51,7 @@ const Guidance = () => {
         </Link>
         <Link
           href="https://www.flaticon.com/free-icons/tick"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2 mb-5`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 mr-2 mb-3`}
         >
           <Text>Pixel perfect</Text>
         </Link>
@@ -68,16 +68,37 @@ const Guidance = () => {
       <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
         Dr. Dykshoorn
       </Text>
+      <View className="flex flex-row items-center justify-start">
+        <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
+          bear {" "}
+        </Text>
+        <Image
+          source={require("../assets/images/bear.png")}
+          className="object-scale-down"
+          style={{
+            width: 33,
+            height: 50,
+          }}
+        />
+      </View>
       <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
-        Dr. Dykshoorn
+        aidan
       </Text>
+      <Image
+        source={require("../assets/images/portrait.png")}
+        className="object-scale-down"
+        style={{
+          width: 90,
+          height: 120,
+        }}
+      />
       <View style={{ alignItems: "center" }}>
         <Link
           href="https://streamable.com/lf027o"
           className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 bg-success/70 py-2 px-3 rounded-lg`}
           style={{ alignSelf: "center" }}
         >
-          <Text>You, for using the app {`(⁠/⁠･⁠ω⁠･⁠(⁠-⁠ω⁠-⁠)`}</Text>
+          <Text>and you, for using the app {`(⁠/⁠･⁠ω⁠･⁠(⁠-⁠ω⁠-⁠)`}</Text>
         </Link>
       </View>
       <Link
@@ -87,11 +108,8 @@ const Guidance = () => {
         <Text>Go back</Text>
       </Link>
 
-      <View
-        className="absolute bottom-4 overflow-hidden"
-        style={{ width: "200%" }}
-      >
-        <Text className="text-appgraydark"> - BSS on top</Text>
+      <View className="absolute bottom-6 left-0 right-0 overflow-hidden items-center">
+        <Text className="text-appgraydark mr-2">rien à redire, bss</Text>
       </View>
     </View>
   );

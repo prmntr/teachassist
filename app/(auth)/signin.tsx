@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import TeachAssistAuthFetcher from "../(auth)/taauth";
+import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
 import BackButton from "../(components)/Back";
 import { useTheme } from "../contexts/ThemeContext";
 import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
@@ -40,8 +40,12 @@ const SignInScreen = () => {
   };
 
   // get what was returned from TeachAssistAuthFetcher's onResult prop
-  const handleAuthResult = (result: string) => {
+  const handleAuthResult = async (result: string) => {
     if (result === "Login Success") {
+      await SecureStorage.save(
+        "marks_last_retrieved",
+        new Date().toISOString(),
+      );
       hapticsNotification(Haptics.NotificationFeedbackType.Success);
       router.replace("/courses");
     } else {

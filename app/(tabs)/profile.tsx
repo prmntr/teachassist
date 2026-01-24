@@ -76,7 +76,7 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
   {
     id: "teachassist",
     title: "TeachAssist Website",
-    url: "https://ta.yrdsb.ca/live/index.php?subject_id=0",
+    url: "https://ta.yrdsb.ca/live/index.php?subject_id=0&username=${username}&password=${password}&submit=Login",
     iconKey: "teachassist",
     kind: "external",
     isDefault: true,
@@ -167,7 +167,7 @@ const normalizeQuickActions = (actions: QuickAction[]) => {
 const ProfileScreen = () => {
   const router = useRouter();
 
-  const appVersion = "v1.3.0"; //* update w/ app.json
+  const appVersion = "v1.3.1"; //* update w/ app.json
 
   const { theme, toggleTheme, isDark } = useTheme();
 
@@ -610,6 +610,23 @@ const ProfileScreen = () => {
   const hasCustomProfileImage = Boolean(image);
   const hasCustomBackgroundImage = Boolean(backgroundImage);
 
+  const resolveQuickActionUrl = async (url: string) => {
+    if (!url.includes("${username}") && !url.includes("${password}")) {
+      return url;
+    }
+    const [savedUsername, savedPassword] = await Promise.all([
+      SecureStorage.load("ta_username"),
+      SecureStorage.load("ta_password"),
+    ]);
+    if (!savedUsername || !savedPassword) {
+      Alert.alert("Please log in again.");
+      return null;
+    }
+    return url
+      .replace("${username}", encodeURIComponent(savedUsername))
+      .replace("${password}", encodeURIComponent(savedPassword));
+  };
+
   const promptLogout = async () => {
     Alert.alert(
       "Are you Sure?",
@@ -641,6 +658,7 @@ const ProfileScreen = () => {
     await SecureStorage.delete("grade_previous_average");
     await SecureStorage.delete("grade_last_known_average");
     await SecureStorage.delete("grade_last_updated");
+    await SecureStorage.delete("marks_last_retrieved");
     await SecureStorage.delete("ta_appointments");
     await SecureStorage.delete("profile_image");
     await SecureStorage.delete("profile_background");
@@ -950,15 +968,21 @@ const ProfileScreen = () => {
                 <View key={action.id} className={`w-1/2 px-2 mb-4`}>
                   <TouchableOpacity
                     className={`rounded-xl p-4 items-center ${isDark ? "bg-dark3" : "bg-light3"} shadow-md`}
-                    onPress={() => {
+                    onPress={async () => {
                       hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
                       if (action.kind === "internal") {
                         router.push(action.url as any);
                       } else {
-                        if (!action.url.includes("https://")) {
-                          Linking.openURL("https://" + action.url);
+                        let resolvedUrl = action.url;
+                        const resolved = await resolveQuickActionUrl(
+                          action.url,
+                        );
+                        if (!resolved) return;
+                        resolvedUrl = resolved;
+                        if (!resolvedUrl.includes("https://")) {
+                          Linking.openURL("https://" + resolvedUrl);
                         }
-                        Linking.openURL(action.url);
+                        Linking.openURL(resolvedUrl);
                       }
                     }}
                   >
@@ -1550,7 +1574,7 @@ const ProfileScreen = () => {
             </View>
           </View>
 
-          <View className={`mb-15`}>
+          <View className={`mb-13`}>
             <Text className={`text-2xl font-bold text-baccent mb-4`}>
               Legal
             </Text>

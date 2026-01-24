@@ -30,7 +30,7 @@ import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 const CoursesScreen = () => {
   const [showUpdates, setShowUpdates] = useState(false);
   const rawAppVersion =
-    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.3.0"; // keep in sync with app.json
+    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.3.1"; // keep in sync with app.json
   const appVersion = rawAppVersion.startsWith("v")
     ? rawAppVersion
     : `v${rawAppVersion}`;
@@ -60,6 +60,9 @@ const CoursesScreen = () => {
   >(null);
   const [hideUnavailableMarks, setHideUnavailableMarks] = useState(false);
   const [tapToRevealMarks, setTapToRevealMarks] = useState(false);
+  const [marksLastRetrieved, setMarksLastRetrieved] = useState<string | null>(
+    null,
+  );
   const [shouldRefreshWithLogin, setShouldRefreshWithLogin] = useState(false);
   const [loginCredentials, setLoginCredentials] = useState<{
     username: string;
@@ -91,6 +94,11 @@ const CoursesScreen = () => {
   const getUserName = async () => {
     const userName = await SecureStorage.load("ta_username");
     return userName;
+  };
+
+  const loadLastRetrieved = async () => {
+    const savedLastRetrieved = await SecureStorage.load("marks_last_retrieved");
+    setMarksLastRetrieved(savedLastRetrieved);
   };
 
   const mergeAndSaveCourses = async (freshCourses: Course[]) => {
@@ -147,6 +155,9 @@ const CoursesScreen = () => {
       hapticsNotification(Haptics.NotificationFeedbackType.Success);
       setShouldRefreshWithLogin(false);
       await loadHtmlOrFetch();
+      const retrievedAt = new Date().toISOString();
+      await SecureStorage.save("marks_last_retrieved", retrievedAt);
+      setMarksLastRetrieved(retrievedAt);
       setRefreshSource(null);
     } else {
       // Parse the HTML using the new parser
@@ -154,6 +165,9 @@ const CoursesScreen = () => {
         const parsedCoursesJson = parseStudentGrades(result);
         const parsedCourses: Course[] = JSON.parse(parsedCoursesJson);
         await mergeAndSaveCourses(parsedCourses);
+        const retrievedAt = new Date().toISOString();
+        await SecureStorage.save("marks_last_retrieved", retrievedAt);
+        setMarksLastRetrieved(retrievedAt);
         setMessage("");
       } catch (error) {
         console.error("Error parsing courses:", error);
@@ -181,6 +195,7 @@ const CoursesScreen = () => {
     const savedCoursesJson = await SecureStorage.load("ta_courses");
 
     await getUserName();
+    await loadLastRetrieved();
 
     if (savedCoursesJson) {
       try {
@@ -252,7 +267,7 @@ const CoursesScreen = () => {
     if (course.grade && course.grade !== "See teacher") {
       return true;
     }
-    return Boolean(course.midtermMark);
+    return Boolean(course.midtermMark || course.finalMark);
   };
 
   const visibleCourses = hideUnavailableMarks
@@ -423,6 +438,7 @@ const CoursesScreen = () => {
               showCourseCount={true}
               showLastUpdated={true}
               hideMarksUntilTap={tapToRevealMarks}
+              refreshToken={marksLastRetrieved ?? undefined}
             />
           </View>
           {showSemester2First ? (

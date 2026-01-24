@@ -1,6 +1,5 @@
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
-import { VideoView, useVideoPlayer } from "expo-video";
 import { useRouter } from "expo-router";
 import {
   Image,
@@ -38,7 +37,7 @@ const HIGHLIGHTS = [
   },
   {
     title: "No snooping",
-    body: "Your data stays on device and talks directly to TeachAssist servers.",
+    body: "Your data stays between you, your phone, and TeachAssist. We're also open source.",
     icon: require("../../assets/images/privacy.png"),
   },
 ];
@@ -50,24 +49,9 @@ const Onboarding = () => {
   const wordmark = isDark
     ? require("../../assets/images/teachassist-wordmark.png")
     : require("../../assets/images/teachassist-wordmark-light.png");
-  const backgroundVideo = isDark
-    ? require("../../assets/images/bubble-wallpaper.mp4")
-    : require("../../assets/images/bubble-wallpaper-light.mp4");
-  const backgroundPlayer = useVideoPlayer(backgroundVideo, (player) => {
-    player.loop = true;
-    player.muted = true;
-    player.play();
-  });
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
-      <VideoView
-        player={backgroundPlayer}
-        style={styles.backgroundVideo}
-        contentFit="cover"
-        pointerEvents="none"
-        nativeControls={false}
-      />
       <LinearGradient
         colors={
           isDark
@@ -104,7 +88,7 @@ const Onboarding = () => {
                 className={`${isDark ? "bg-dark3/75" : "bg-light3/85"} rounded-2xl px-4 py-4 flex-row items-start mb-4`}
               >
                 <View
-                  className={`w-12 h-12 rounded-xl ${isDark ? "bg-dark4/80" : "bg-light4/80"} items-center justify-center mr-4`}
+                  className={`w-12 h-12 rounded-full bg-[#27b1fa]/70 items-center justify-center mr-4 mt-3`}
                 >
                   <Image
                     source={item.icon}
@@ -114,7 +98,7 @@ const Onboarding = () => {
                 </View>
                 <View className={`flex-1`}>
                   <Text
-                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-light`}
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold`}
                   >
                     {item.title}
                   </Text>
@@ -135,7 +119,7 @@ const Onboarding = () => {
             }}
           >
             <View
-              className={`bg-baccent/90 px-5 py-3 rounded-xl shadow-lg flex-row items-center justify-center`}
+              className={`bg-baccent/80 px-5 py-3 rounded-xl shadow-lg flex-row items-center justify-center`}
             >
               <Text
                 className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
