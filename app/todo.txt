@@ -13,11 +13,14 @@ modal problems
 
 clean up comments and code remove redundant stuff (never happening)
 
-i'm prob not adding ios support, 99 dollas is EXPENSIVE
+ios support coming soon
 
 gurt: yo - curgot
+
+next add : course times and notifications for courses
 
 fixed overal/culminating bug
 fixed marks of 0 not showing
 
 
+- liquid (gl)ass

@@ -16,6 +16,7 @@ import { Course } from "./CourseParser";
 interface CourseInfoBoxProps {
   course: Course; // pass the course directly instead of loading it
   hideMarksUntilTap?: boolean;
+  overrideCourseMark?: number | null;
 }
 
 interface DisplayCourse {
@@ -44,6 +45,7 @@ const getCurrentMark = (course: Course): string | null => {
 export const CourseInfoBox = ({
   course,
   hideMarksUntilTap = false,
+  overrideCourseMark,
 }: CourseInfoBoxProps) => {
   const { isDark } = useTheme();
   const [revealCourseMark, setRevealCourseMark] = useState(false);
@@ -51,18 +53,25 @@ export const CourseInfoBox = ({
   const [revealFinalMark, setRevealFinalMark] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const displayCourse = useMemo((): DisplayCourse => {
+    const overrideMark =
+      typeof overrideCourseMark === "number" &&
+      Number.isFinite(overrideCourseMark)
+        ? overrideCourseMark
+        : null;
     const currentMark = getCurrentMark(course);
     const midtermMark = course.midtermMark ?? null;
     const finalMark = course.finalMark ?? null;
-    const hasGrade = Boolean(currentMark);
-    const courseMark = currentMark ?? "N/A";
+    const resolvedCurrentMark =
+      overrideMark !== null ? overrideMark.toFixed(1) : currentMark;
+    const hasGrade = resolvedCurrentMark !== null;
+    const courseMark = resolvedCurrentMark ?? "N/A";
 
     // change course to displaycourse
     return {
       courseName: course.courseName,
       courseCode: course.courseCode,
       courseMark,
-      currentMark,
+      currentMark: resolvedCurrentMark,
       midtermMark,
       finalMark,
       block: course.block,
@@ -70,7 +79,7 @@ export const CourseInfoBox = ({
       semester: course.semester,
       hasGrade,
     };
-  }, [course]);
+  }, [course, overrideCourseMark]);
 
   useEffect(() => {
     if (hideMarksUntilTap) {
@@ -88,12 +97,13 @@ export const CourseInfoBox = ({
   const showCourseMark = !hideMarksUntilTap || revealCourseMark;
   const showMidtermMark = !hideMarksUntilTap || revealMidtermMark;
   const showFinalMark = !hideMarksUntilTap || revealFinalMark;
-  const hasOnlyMidterm = Boolean(
-    displayCourse.midtermMark &&
+  const hasTermMarksWithoutCurrent = Boolean(
     !displayCourse.currentMark &&
-    !displayCourse.finalMark,
+      (displayCourse.midtermMark || displayCourse.finalMark),
   );
-  const showStaleIndicator = Boolean(course.isGradeStale || hasOnlyMidterm);
+  const showStaleIndicator = Boolean(
+    course.isGradeStale || hasTermMarksWithoutCurrent,
+  );
 
   const staleInfoModal = (
     <Modal visible={showInfo} transparent animationType="slide">
@@ -148,7 +158,7 @@ export const CourseInfoBox = ({
   // No course found or no grade available
   if (!displayCourse || !displayCourse.hasGrade) {
     return (
-      <>
+      <View className="shadow-md">
         {staleInfoModal}
         <View
           className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 w-full relative overflow-hidden`}
@@ -186,24 +196,31 @@ export const CourseInfoBox = ({
             </TouchableOpacity>
           )}
           <View style={{ zIndex: 1 }}>
-            <View className={`flex-row items-center justify-start`}>
-              <View className={`w-2 h-2 bg-gray-400 rounded-full mr-2`} />
-              <Text
-                className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm`}
-              >
-                Grade Not Available
-              </Text>
+            <View className={`flex-row items-center justify-between mb-1`}>
+              <View className="flex-row items-center">
+                <View
+                  className={`w-2 h-2 ${isDark ? "bg-appwhite/60" : "bg-appblack"} rounded-full mr-2`}
+                />
+                <Text
+                  className={`${isDark ? "text-appwhite/60" : "text-appblack"} text-sm font-normal`}
+                >
+                  {"Grade not available"}
+                </Text>
+              </View>
             </View>
+            <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
+              Period {displayCourse.block}
+            </Text>
             <Text
-              className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-2xl font-bold mb-1`}
+              className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold`}
             >
-              {displayCourse?.courseName || "Course Not Found"}
+              {displayCourse.courseName}
             </Text>
             {displayCourse && (
               <Text
-                className={`${isDark ? "text-appwhite/80" : "text-appblack/80"} text-sm `}
+                className={`${isDark ? "text-appwhite/80" : "text-appblack/80"}`}
               >
-                {displayCourse.courseCode} • Semester {displayCourse.semester}
+                {displayCourse.courseCode} • Room {displayCourse.room}
               </Text>
             )}
             {(displayCourse?.midtermMark || displayCourse?.finalMark) && (
@@ -279,7 +296,7 @@ export const CourseInfoBox = ({
             )}
           </View>
         </View>
-      </>
+      </View>
     );
   }
 
@@ -494,6 +511,7 @@ interface QuickCourseProps {
   courseCode?: string;
   subjectId?: string;
   hideMarksUntilTap?: boolean;
+  overrideCourseMark?: number | null;
 }
 
 export const QuickCourse = ({
@@ -501,6 +519,7 @@ export const QuickCourse = ({
   courseCode,
   subjectId,
   hideMarksUntilTap,
+  overrideCourseMark,
 }: QuickCourseProps) => {
   const { isDark } = useTheme();
   const selectedCourse = useMemo((): Course | null => {
@@ -553,6 +572,7 @@ export const QuickCourse = ({
     <CourseInfoBox
       course={selectedCourse}
       hideMarksUntilTap={hideMarksUntilTap}
+      overrideCourseMark={overrideCourseMark}
     />
   );
 };

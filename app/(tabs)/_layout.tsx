@@ -6,8 +6,10 @@ import {
   Alert,
   AppState,
   Image,
+  Platform,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -67,6 +69,7 @@ export default function TabLayout() {
   const [isUnlocking, setIsUnlocking] = useState(false);
   const appStateRef = useRef(AppState.currentState);
   const isUnlockingRef = useRef(false);
+  const { width, height } = useWindowDimensions();
 
   const attemptUnlock = useCallback(
     async (enabledOverride?: boolean) => {
@@ -167,6 +170,13 @@ export default function TabLayout() {
 
     return () => subscription.remove();
   }, [attemptUnlock, biometricLockEnabled]);
+  const isAppleLandscape =
+    Platform.OS === "ios" || (Platform.OS === "macos" && width > height);
+  const tabBarBaseHeight = isAppleLandscape
+    ? 58
+    : Platform.OS === "ios" || Platform.OS === "macos"
+      ? 47
+      : 64;
   return (
     <View className="flex-1">
       <Tabs
@@ -182,7 +192,7 @@ export default function TabLayout() {
             overflow: "hidden",
             borderColor: `${isDark ? "#2a2a2a" : "#eeeeee"}`,
             borderTopWidth: 2,
-            height: 64 + insets.bottom,
+            height: tabBarBaseHeight + insets.bottom,
             paddingBottom: insets.bottom,
           },
         }}

@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as LocalAuthentication from "expo-local-authentication";
-import { Link, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   Alert,
@@ -15,10 +15,22 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  Platform,
 } from "react-native";
 import { SecureStorage } from "../(auth)/taauth";
 import { SnowEffect } from "../(components)/SnowEffect";
 import UpdatesModal from "../(components)/UpdatesModal";
+import {
+  getBiometricLockEnabled,
+  setBiometricLockEnabled as persistBiometricLockEnabled,
+  subscribeBiometricLock,
+} from "../(utils)/biometricLock";
+import {
+  getHapticsEnabled,
+  hapticsImpact,
+  hapticsNotification,
+  setHapticsEnabled as saveHapticsEnabled,
+} from "../(utils)/haptics";
 import {
   clearGuidanceReminders,
   ensureNotificationPermissions,
@@ -29,17 +41,6 @@ import {
   triggerMarksTest,
 } from "../(utils)/notifications";
 import { useTheme } from "../contexts/ThemeContext";
-import {
-  getHapticsEnabled,
-  hapticsImpact,
-  hapticsNotification,
-  setHapticsEnabled as saveHapticsEnabled,
-} from "../(utils)/haptics";
-import {
-  getBiometricLockEnabled,
-  setBiometricLockEnabled as persistBiometricLockEnabled,
-  subscribeBiometricLock,
-} from "../(utils)/biometricLock";
 
 type QuickAction = {
   id: string;
@@ -57,7 +58,8 @@ const QUICK_ACTION_ICONS = {
   brightspace: require("../../assets/images/brightspace.webp"),
   classroom: require("../../assets/images/g-class.png"),
   volunteer: require("../../assets/images/volunteer.png"),
-  googleplay: require("../../assets/images/blocks.png"),
+  examcalc: require("../../assets/images/calculator.png"),
+  teachappicon: require("../../assets/images/blocks.png"),
   map: require("../../assets/images/map.png"),
   custom: require("../../assets/images/link.png"),
 };
@@ -92,6 +94,15 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
     isHidden: false,
   },
   {
+    id: "exam-calc",
+    title: "Exam Calculator",
+    url: "/ExamCalc",
+    iconKey: "examcalc",
+    kind: "internal",
+    isDefault: true,
+    isHidden: false,
+  },
+  {
     id: "blueprint",
     title: "myBlueprint",
     url: "https://app.myblueprint.ca/",
@@ -107,22 +118,25 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
     iconKey: "brightspace",
     kind: "external",
     isDefault: true,
-    isHidden: false,
+    isHidden: true,
   },
   {
     id: "classroom",
     title: "Google Classroom",
-    url: "market://details?id=com.google.android.apps.classroom",
+    url:
+      Platform.OS === "ios" || Platform.OS === "macos"
+        ? "itms-apps://apps.apple.com/app/id924620788"
+        : "market://details?id=com.google.android.apps.classroom",
     iconKey: "classroom",
     kind: "external",
     isDefault: true,
     isHidden: true,
   },
   {
-    id: "googleplay",
+    id: "teachappicon",
     title: "TeachAssist App",
     url: "https://play.google.com/store/apps/details?id=com.prmntr.teachassist",
-    iconKey: "googleplay",
+    iconKey: "teachappicon",
     kind: "external",
     isDefault: true,
     isHidden: true,
@@ -167,7 +181,7 @@ const normalizeQuickActions = (actions: QuickAction[]) => {
 const ProfileScreen = () => {
   const router = useRouter();
 
-  const appVersion = "v1.3.1"; //* update w/ app.json
+  const appVersion = "v1.3.2"; //* update w/ app.json
 
   const { theme, toggleTheme, isDark } = useTheme();
 
@@ -560,7 +574,7 @@ const ProfileScreen = () => {
           style: "cancel",
         },
         {
-          text: "Yes, Cancel",
+          text: "Yes, Delete",
           style: "destructive",
           onPress: () => {
             const updated = quickActions.filter((item) => item.id !== actionId);
@@ -727,7 +741,10 @@ const ProfileScreen = () => {
               <Text className="font-semibold text-baccent">
                 Note: Notifications may fail to run with an active VPN to a
                 country outside of Canada, or with battery optimizations for
-                TeachAssist turned on.
+                TeachAssist turned on.{" "}
+                {Platform.OS === "ios" || Platform.OS === "macos"
+                  ? "ios"
+                  : "android"}
               </Text>
             </Text>
             <TouchableOpacity
@@ -1007,7 +1024,6 @@ const ProfileScreen = () => {
               ))}
             </View>
           </View>
-
           <View className={`mb-6`}>
             <Text className={`text-2xl font-bold text-baccent mb-4`}>
               Notifications
@@ -1023,7 +1039,7 @@ const ProfileScreen = () => {
             </TouchableOpacity>
             */}
             <View
-              className={`${isDark ? "bg-dark3" : "bg-light3"} shadow-md rounded-2xl overflow-hidden`}
+              className={`${isDark ? "bg-dark3" : "bg-light2"} rounded-2xl overflow-hidden`}
             >
               <View
                 className={`px-4 py-3 flex-row justify-between items-center`}
@@ -1209,7 +1225,8 @@ const ProfileScreen = () => {
                   <Text
                     className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm mt-1`}
                   >
-                    Alert me after a background check finds no updates. This option will be removed soon.
+                    Alert me after a background check finds no updates. This
+                    option will be removed soon.
                   </Text>
                 </View>
                 <TouchableOpacity

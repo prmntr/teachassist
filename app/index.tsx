@@ -262,7 +262,7 @@ const InitialRoute = () => {
             </View>
           </TouchableOpacity>
           <Text className={`text-baccent text-lg mt-6 text-center`}>
-            Version 1.3.1
+            Version 1.3.2
           </Text>
         </View>
       </View>

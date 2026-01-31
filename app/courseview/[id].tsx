@@ -10,6 +10,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Dropdown } from "react-native-element-dropdown";
@@ -17,6 +18,7 @@ import { BarChart, LineChart } from "react-native-gifted-charts";
 import AnimatedProgressWheel from "react-native-progress-wheel";
 import { SecureStorage } from "../(auth)/taauth";
 import BackButton from "../(components)/Back";
+import { type Course } from "../(components)/CourseParser";
 import {
   getCategoryFullName,
   getPerformanceText,
@@ -24,6 +26,7 @@ import {
   parseGradeData,
   type ParsedCourseData,
 } from "../(components)/GradeParser";
+import { QuickCourse } from "../(components)/QuickCourse";
 import { useTheme } from "../contexts/ThemeContext";
 import { hapticsImpact } from "../(utils)/haptics";
 
@@ -32,10 +35,14 @@ type CategoryKey = "K" | "T" | "C" | "A" | "O";
 const CourseViewScreen = () => {
   // no check for internet needed b/c cached from first view and course page blocks refresh that clears this
   const { isDark } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const { id } = useLocalSearchParams();
-  const subjectID = id ? parseInt(id as string, 10) : null;
+  const subjectIdValue = Array.isArray(id) ? id[0] : id;
+  const subjectID = subjectIdValue ? parseInt(subjectIdValue, 10) : null;
 
   const [courseData, setCourseData] = useState<ParsedCourseData | null>(null);
+  const [storedCourses, setStoredCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("Loading...");
   const [activeTab, setActiveTab] = useState<"courses" | "analytics">(
@@ -62,6 +69,24 @@ const CourseViewScreen = () => {
   useEffect(() => {
     setSelectedCategoryValue(null);
   }, [selectedCategoryKey]);
+
+  useEffect(() => {
+    const loadStoredCourses = async () => {
+      const storedCoursesJson = await SecureStorage.load("ta_courses");
+      if (!storedCoursesJson) {
+        setStoredCourses([]);
+        return;
+      }
+      try {
+        const parsedCourses = JSON.parse(storedCoursesJson);
+        setStoredCourses(Array.isArray(parsedCourses) ? parsedCourses : []);
+      } catch {
+        setStoredCourses([]);
+      }
+    };
+
+    loadStoredCourses();
+  }, []);
 
   const getUser = async () => {
     return await SecureStorage.load("ta_username");
@@ -1431,9 +1456,9 @@ const CourseViewScreen = () => {
           <View className={`flex-1 pb-3 pr-2`}>
             <LineChart
               data={overallLineData}
-              isAnimated
+              isAnimated={!isLandscape}
               focusEnabled
-              scrollAnimation={true}
+              scrollAnimation={!isLandscape}
               onFocus={(item: { value?: number }) => {
                 if (typeof item?.value === "number") {
                   setSelectedOverallValue(item.value);
@@ -1485,7 +1510,7 @@ const CourseViewScreen = () => {
               Learning Categories
             </Text>
 
-            <View style={{ minWidth: 170 }}>
+            <View style={{ minWidth: 170 }} className="shadow-md">
               <Dropdown
                 style={[
                   styles.dropdown,
@@ -1549,7 +1574,7 @@ const CourseViewScreen = () => {
 
           {selectedCategoryData.length === 0 ? (
             <View
-              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6`}
+              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 shadow-md`}
             >
               <Text
                 className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-center text-sm`}
@@ -1559,7 +1584,7 @@ const CourseViewScreen = () => {
             </View>
           ) : (
             <View
-              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 pb-7`}
+              className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 pb-7 shadow-md`}
             >
               <View className="flex-row justify-between items-center mb-4">
                 <Text
@@ -1577,8 +1602,8 @@ const CourseViewScreen = () => {
               <View className="pr-2">
                 <LineChart
                   data={selectedCategoryData}
-                  isAnimated
-                  scrollAnimation={true}
+                  isAnimated={!isLandscape}
+                  scrollAnimation={!isLandscape}
                   height={150}
                   spacing={selectedCategoryData.length > 4 ? 45 : 55}
                   initialSpacing={15}
@@ -1631,8 +1656,8 @@ const CourseViewScreen = () => {
           <View className={`mr-4 flex items-center justify-center`}>
             <BarChart
               data={assignmentData}
-              isAnimated
-              scrollAnimation={true}
+              isAnimated={!isLandscape}
+              scrollAnimation={!isLandscape}
               height={230}
               barWidth={30}
               spacing={12}
@@ -1817,6 +1842,32 @@ const CourseViewScreen = () => {
           parseWeightingValue(courseData.summary.courseWeightings.final)
       )
     : "";
+  const showAddAssignmentButton =
+    isEditMode && (activeTab === "courses" || isLandscape);
+  const addAssignmentButton = showAddAssignmentButton ? (
+    <View className="mb-6">
+      {!showAddAssignment ? (
+        <View className="shadow-md">
+          <TouchableOpacity
+            className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 items-center`}
+            onPress={() => {
+              setShowAssignmentModal(true);
+              hapticsImpact(Haptics.ImpactFeedbackStyle.Medium);
+            }}
+          >
+            <Text className={`text-baccent text-lg font-semibold mb-1`}>
+              + Add Assignment
+            </Text>
+            <Text
+              className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
+            >
+              Project your performance with custom assignments
+            </Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+    </View>
+  ) : null;
 
   return (
     <View className={`${isDark ? "bg-dark1" : "bg-light1"} flex-1`}>
@@ -1844,21 +1895,39 @@ const CourseViewScreen = () => {
       </TouchableOpacity>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        <View className={`pt-20 px-5 pb-10 mt-13`}>
+        {isLandscape && (
           <Text
-            className={`text-center ${isDark ? "text-appwhite" : "text-appblack"} text-4xl font-semibold mb-3`}
+            className={`mt-16 text-center ${isDark ? "text-appwhite" : "text-appblack"} text-3xl font-semibold`}
           >
             {isLoading && !courseData
               ? "Loading..."
               : courseData?.courseName || "Course"}
           </Text>
+        )}
+        {/* i know... */}
+        {!isLandscape && (
+          <>
+            <View className="mt-10"></View>
+            <View className="mt-10"></View>
+            <View className="mt-3"></View>
+          </>
+        )}
+        <View className={`px-5 pb-10 mt-7`}>
+          {!isLandscape && (
+            <Text
+              className={`text-center ${isDark ? "text-appwhite" : "text-appblack"} text-4xl font-semibold mb-3`}
+            >
+              {isLoading && !courseData
+                ? "Loading..."
+                : courseData?.courseName || "Course"}
+            </Text>
+          )}
           {/* 
           <Text
             className={` text-center rounded-lg font-medium mb-5 ${isDark ? "text-appgraydark" : "text-appgraydark"}`}
           >
             {message}
           </Text>*/}
-
           {isLoading ? (
             <>
               <ActivityIndicator size="large" color="#27b1fa" />
@@ -1867,132 +1936,52 @@ const CourseViewScreen = () => {
             <View className={`w-full`}>
               {/* grade summary */}
               {courseData.summary && (
-                <View
-                  className={`mb-6 flex-row justify-around ${isDark ? "bg-dark3" : "bg-light3"} shadow-lg p-3 pt-6 pb-5 rounded-xl`}
-                >
-                  {/* 
-                  {courseData.summary.term && (
-                    <View className={`items-center`}>
-                      <View className="items-center justify-center relative">
-                        <AnimatedProgressWheel
-                          size={115}
-                          width={13}
-                          color={"#27b1fa"}
-                          backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                          progress={
-                            courseData.summary.term === 999
-                              ? NaN
-                              : courseData.summary.term
-                          }
-                          max={100}
-                          rounded={true}
-                          rotation={"-90deg"}
-                          delay={75}
-                          duration={400}
-                          showPercentageSymbol={true}
-                        />
-                        <View className="absolute inset-0 items-center justify-center">
-                          <Text
-                            style={{
-                              color:
-                                courseData.summary.term >= 50
-                                  ? "#27b1fa"
-                                  : "#d6363f",
-                              fontSize: 21,
-                              fontWeight: "600",
-                            }}
-                          >
-                            {courseData.summary.term.toFixed(1)}%
-                          </Text>
-                        </View>
-                      </View>
-                      <Text
-                        className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold mt-2`}
-                      >
-                        Term Average
-                      </Text>
-                    </View>
-                  )}
-                  */}
-                  <View className={``}>
-                    <View className="items-center justify-center">
-                      <AnimatedProgressWheel
-                        size={115}
-                        width={12}
-                        color={"#2faf7f"}
-                        backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                        progress={courseAverage}
-                        max={100}
-                        rounded={true}
-                        rotation={"-90deg"}
-                        delay={75}
-                        duration={400}
-                        showPercentageSymbol={true}
-                      />
-                      <View className="absolute">
-                        {/* Add this wrapper with absolute positioning */}
-                        <Text
-                          style={{
-                            color: courseAverage >= 50 ? "#2faf7f" : "#d6363f",
-                            fontSize: 21,
-                            fontWeight: "600",
-                          }}
-                        >
-                          {courseAverage.toFixed(1)}%
-                        </Text>
-                      </View>
-                    </View>
-                    <Text
-                      className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold mt-2`}
-                    >
-                      Course Average
-                    </Text>
-                  </View>
+                <View className="mb-6">
+                  <QuickCourse
+                    courses={storedCourses}
+                    subjectId={subjectIdValue}
+                    overrideCourseMark={courseAverage}
+                  />
                 </View>
               )}
 
               {/* tabs */}
-              <View
-                className={`flex-row mb-6 gap-2 ${isDark ? "bg-dark3" : "bg-light3"} p-3 rounded-lg shadow-md`}
-              >
-                {renderTabButton("courses", "Courses")}
-                {renderTabButton("analytics", "Analytics")}
-              </View>
-
-              {/* Add Assignment Button (shown when edit mode is active and on courses tab) */}
-              {isEditMode && activeTab === "courses" && (
-                <View className="mb-6">
-                  {!showAddAssignment ? (
-                    <View className="shadow-md">
-                      <TouchableOpacity
-                        className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-4 items-center`}
-                        onPress={() => {
-                          setShowAssignmentModal(true);
-                          hapticsImpact(
-                            Haptics.ImpactFeedbackStyle.Medium,
-                          );
-                        }}
-                      >
-                        <Text
-                          className={`text-baccent text-lg font-semibold mb-1`}
-                        >
-                          + Add Assignment
-                        </Text>
-                        <Text
-                          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
-                        >
-                          Project your performance with custom assignments
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
+              {!isLandscape && (
+                <View
+                  className={`flex-row mb-6 gap-2 ${isDark ? "bg-dark3" : "bg-light3"} p-3 rounded-lg shadow-md`}
+                >
+                  {renderTabButton("courses", "Courses")}
+                  {renderTabButton("analytics", "Analytics")}
                 </View>
               )}
 
-              {/* Tab Content */}
-              {activeTab === "courses"
-                ? renderCoursesTab()
-                : renderAnalyticsTab()}
+              {!isLandscape && addAssignmentButton}
+
+              {isLandscape ? (
+                <View className="flex-row gap-4">
+                  <View className="flex-1">
+                    <Text
+                      className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold mb-4`}
+                    >
+                      Courses
+                    </Text>
+                    {addAssignmentButton}
+                    {renderCoursesTab()}
+                  </View>
+                  <View className="flex-1">
+                    <Text
+                      className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold mb-4`}
+                    >
+                      Analytics
+                    </Text>
+                    {renderAnalyticsTab()}
+                  </View>
+                </View>
+              ) : activeTab === "courses" ? (
+                renderCoursesTab()
+              ) : (
+                renderAnalyticsTab()
+              )}
             </View>
           ) : (
             /* Error State */

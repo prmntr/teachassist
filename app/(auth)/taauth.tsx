@@ -121,6 +121,12 @@ const parseSetCookieHeader = (value: string | null): Record<string, string> => {
   }, {});
 };
 
+const isDeletedCookieValue = (value: string | null | undefined): boolean => {
+  if (value === null || value === undefined) return true;
+  const normalized = value.trim().toLowerCase();
+  return normalized.length === 0 || normalized === "deleted";
+};
+
 const extractStudentIdFromHtml = (html: string): string | null => {
   if (!html) return null;
   const queryMatch = html.match(/student_id=(\d+)/i);
@@ -144,14 +150,28 @@ const extractSessionTokenFromHtml = (html: string): string | null => {
 const buildCookieHeader = async (): Promise<string | null> => {
   const storedCookies = await SecureStorage.load("ta_cookies");
   if (storedCookies && storedCookies.length > 0) {
-    return storedCookies;
+    const storedMap = parseCookieHeader(storedCookies);
+    const filteredEntries = Object.entries(storedMap).filter(
+      ([, value]) => !isDeletedCookieValue(value)
+    );
+    if (filteredEntries.length > 0) {
+      const sanitizedHeader = filteredEntries
+        .map(([name, value]) => `${name}=${value}`)
+        .join("; ");
+      if (sanitizedHeader !== storedCookies) {
+        await SecureStorage.save("ta_cookies", sanitizedHeader);
+      }
+      return sanitizedHeader;
+    }
   }
 
   const studentId = await SecureStorage.load("ta_student_id");
   const sessionToken = await SecureStorage.load("ta_session_token");
-  if (!sessionToken) return null;
+  if (!sessionToken || isDeletedCookieValue(sessionToken)) return null;
   const cookieParts = [`session_token=${sessionToken}`];
-  if (studentId) cookieParts.push(`student_id=${studentId}`);
+  if (studentId && !isDeletedCookieValue(studentId)) {
+    cookieParts.push(`student_id=${studentId}`);
+  }
   return cookieParts.join("; ");
 };
 
@@ -161,19 +181,43 @@ const syncCookiesFromResponse = async (response: Response) => {
 
   const current = parseCookieHeader(await SecureStorage.load("ta_cookies"));
   const updates = parseSetCookieHeader(setCookie);
-  const merged = { ...current, ...updates };
-  const mergedHeader = Object.entries(merged)
+  const merged = { ...current };
+  const deletes = new Set<string>();
+  Object.entries(updates).forEach(([name, value]) => {
+    if (isDeletedCookieValue(value)) {
+      delete merged[name];
+      deletes.add(name);
+      return;
+    }
+    merged[name] = value;
+  });
+
+  const mergedEntries = Object.entries(merged).filter(
+    ([, value]) => !isDeletedCookieValue(value)
+  );
+  const mergedHeader = mergedEntries
     .map(([name, value]) => `${name}=${value}`)
     .join("; ");
 
   if (mergedHeader.length > 0) {
     await SecureStorage.save("ta_cookies", mergedHeader);
+  } else {
+    await SecureStorage.delete("ta_cookies");
   }
 
   const studentId = merged.student_id ?? null;
   const sessionToken = merged.session_token ?? null;
-  if (studentId) await SecureStorage.save("ta_student_id", studentId);
-  if (sessionToken) await SecureStorage.save("ta_session_token", sessionToken);
+  if (studentId && !isDeletedCookieValue(studentId)) {
+    await SecureStorage.save("ta_student_id", studentId);
+  } else if (deletes.has("student_id")) {
+    await SecureStorage.delete("ta_student_id");
+  }
+
+  if (sessionToken && !isDeletedCookieValue(sessionToken)) {
+    await SecureStorage.save("ta_session_token", sessionToken);
+  } else if (deletes.has("session_token")) {
+    await SecureStorage.delete("ta_session_token");
+  }
 };
 
 const syncStoredSessionFromCookies = async () => {
@@ -194,13 +238,23 @@ const syncStoredSessionFromCookies = async () => {
 
 const fetchHtmlWithCookies = async (
   url: string,
-  init: RequestInit = {}
+  init: RequestInit = {},
+  logCookieContext?: string
 ): Promise<{ html: string; response: Response }> => {
   const cookieHeader = await buildCookieHeader();
   const headers = new Headers(init.headers ?? {});
 
   if (cookieHeader) {
     headers.set("Cookie", cookieHeader);
+  }
+
+  if (logCookieContext) {
+    const effectiveCookie = headers.get("Cookie");
+    console.log(
+      `taauth: ${logCookieContext} cookie header: ${
+        effectiveCookie ?? "<none>"
+      }`
+    );
   }
 
   if (!headers.has("Accept")) {
@@ -647,9 +701,10 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
     const fetchHtmlWithAutoReauth = async (
       url: string,
-      init?: RequestInit
+      init?: RequestInit,
+      logCookieContext?: string
     ): Promise<{ html: string; reauthed: boolean }> => {
-      const first = await fetchHtmlWithCookies(url, init);
+      const first = await fetchHtmlWithCookies(url, init, logCookieContext);
       if (!first.html.toLowerCase().includes("log in")) {
         return { html: first.html, reauthed: false };
       }
@@ -670,7 +725,11 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         return { html: first.html, reauthed: false };
       }
 
-      const retry = await fetchHtmlWithCookies(url, init);
+      const retry = await fetchHtmlWithCookies(
+        url,
+        init,
+        logCookieContext ? `${logCookieContext} (retry)` : undefined
+      );
       return { html: retry.html, reauthed: true };
     };
 
@@ -756,6 +815,13 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         if (getGuidance) {
           const savedStudentId = await SecureStorage.load("ta_student_id");
           const savedSchoolId = await SecureStorage.load("school_id");
+          const storedCookieHeader = await SecureStorage.load("ta_cookies");
+          const storedSessionToken = await SecureStorage.load("ta_session_token");
+          console.log(
+            `taauth: guidance cookie debug - ta_cookies: ${
+              storedCookieHeader ?? "<missing>"
+            }, ta_session_token: ${storedSessionToken ?? "<missing>"}`
+          );
 
           if (!savedStudentId || !savedSchoolId) {
             safeOnResult(
@@ -775,7 +841,11 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
           const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`;
 
-          const { html } = await fetchHtmlWithAutoReauth(url);
+          const { html } = await fetchHtmlWithAutoReauth(
+            url,
+            undefined,
+            "guidance request"
+          );
           if (html.toLowerCase().includes("log in")) {
             safeOnResult(
               "Retrieval failed: Session expired or invalid cookies."

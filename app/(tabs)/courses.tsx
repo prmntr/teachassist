@@ -14,6 +14,7 @@ import {
   ScrollView,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
@@ -30,7 +31,7 @@ import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
 const CoursesScreen = () => {
   const [showUpdates, setShowUpdates] = useState(false);
   const rawAppVersion =
-    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.3.1"; // keep in sync with app.json
+    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.3.2"; // keep in sync with app.json
   const appVersion = rawAppVersion.startsWith("v")
     ? rawAppVersion
     : `v${rawAppVersion}`;
@@ -52,6 +53,8 @@ const CoursesScreen = () => {
     checkAndShowUpdates();
   }, [appVersion]);
   const { isDark } = useTheme();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -74,6 +77,40 @@ const CoursesScreen = () => {
   const refreshButtonStyle = isButtonRefreshing
     ? { opacity: 0.6, transform: [{ scale: 0.96 }] }
     : undefined;
+  const renderHeaderOutside = !(isLandscape && courses.length > 0);
+  const renderGreetingOutside = !(isLandscape && courses.length > 0);
+  const headerContent = (withHorizontalPadding: boolean) => (
+    <View
+      className={`flex-row items-center justify-between ${
+        withHorizontalPadding ? "px-5 mt-16" : "mt-13"
+      }`}
+    >
+      <Text
+        className={`text-5xl font-semibold leading-[55px] ${isDark ? "text-appwhite" : "text-appblack"}`}
+      >
+        My Courses
+      </Text>
+      <View className="shadow-md">
+        <TouchableOpacity
+          onPress={() => {
+            hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+            handleRefresh("button");
+          }}
+          className={`${isDark ? "bg-baccent/95" : "bg-baccent"} rounded-lg px-3 py-2`}
+          style={refreshButtonStyle}
+          disabled={isLoading}
+        >
+          <Image
+            source={require("../../assets/images/refresh.png")}
+            className={`w-7 h-8`}
+            style={{
+              tintColor: `${isDark ? "#111113" : "#fafafa"}`,
+            }}
+          />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   // Christmas
   const now = new Date();
@@ -367,33 +404,8 @@ const CoursesScreen = () => {
       ) : (
         <></>
       )}
-      <View className={`flex-row items-center justify-between mt-16 px-5`}>
-        <Text
-          className={`text-5xl font-semibold leading-[55px] ${isDark ? "text-appwhite" : "text-appblack"}`}
-        >
-          My Courses
-        </Text>
-        <View className="shadow-md">
-          <TouchableOpacity
-            onPress={() => {
-              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-              handleRefresh("button");
-            }}
-            className={`${isDark ? "bg-baccent/95" : "bg-baccent"} rounded-lg px-3 py-2`}
-            style={refreshButtonStyle}
-            disabled={isLoading}
-          >
-            <Image
-              source={require("../../assets/images/refresh.png")}
-              className={`w-7 h-8`}
-              style={{
-                tintColor: `${isDark ? "#111113" : "#fafafa"}`,
-              }}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-      <Messages />
+      {renderHeaderOutside && headerContent(true)}
+      {renderGreetingOutside && <Messages />}
       {message === "" ? (
         <View className={`mb-3`}></View> // show nothing successfully fetched
       ) : (
@@ -431,6 +443,12 @@ const CoursesScreen = () => {
             />
           }
         >
+          {isLandscape && headerContent(false)}
+          {isLandscape && (
+            <View className="-mx-5">
+              <Messages />
+            </View>
+          )}
           {/* this is literally the only way it works and i have no idea why wtf*/}
           <View className="shadow-md mt-5">
             <GradeAverageTracker

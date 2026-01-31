@@ -1,14 +1,16 @@
-import { Link } from "expo-router";
-import { Text, View, Image } from "react-native";
+import { Link, useRouter } from "expo-router";
+import { Image, Text, View } from "react-native";
 import { useTheme } from "./contexts/ThemeContext";
+import BackButton from "./(components)/Back";
 
 const Guidance = () => {
   const { isDark } = useTheme();
 
   return (
     <View className={`flex-1 px-5  ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <BackButton path={"/profile"} />
       <Text
-        className={`text-5xl font-semibold mt-18 ${isDark ? "text-appwhite" : "text-appblack"}`}
+        className={`text-5xl font-semibold mt-30 ${isDark ? "text-appwhite" : "text-appblack"}`}
       >
         Credits
       </Text>
@@ -70,7 +72,7 @@ const Guidance = () => {
       </Text>
       <View className="flex flex-row items-center justify-start">
         <Text className={`${isDark ? "text-appwhite" : "text-appblack"}`}>
-          bear {" "}
+          --{">"}
         </Text>
         <Image
           source={require("../assets/images/bear.png")}
@@ -81,32 +83,47 @@ const Guidance = () => {
           }}
         />
       </View>
-      <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
-        aidan
-      </Text>
-      <Image
-        source={require("../assets/images/portrait.png")}
-        className="object-scale-down"
-        style={{
-          width: 90,
-          height: 120,
-        }}
-      />
+      <View className="flex flex-row">
+        <View className="mr-2">
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          >
+            little boy
+          </Text>
+          <Image
+            source={require("../assets/images/portrait.jpeg")}
+            className="object-scale-down"
+            style={{
+              width: 90,
+              height: 120,
+            }}
+          />
+        </View>
+        <View>
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}
+          >
+            fat man
+          </Text>
+          <Image
+            source={require("../assets/images/boy.jpeg")}
+            className="object-scale-down"
+            style={{
+              width: 90,
+              height: 120,
+            }}
+          />
+        </View>
+      </View>
       <View style={{ alignItems: "center" }}>
         <Link
           href="https://streamable.com/lf027o"
-          className={`${isDark ? "text-appwhite" : "text-appblack"} my-2 bg-success/70 py-2 px-3 rounded-lg`}
+          className={`${isDark ? "text-appwhite" : "text-appblack"} mt-5 bg-success/70 py-2 px-3 rounded-lg`}
           style={{ alignSelf: "center" }}
         >
           <Text>and you, for using the app {`(⁠/⁠･⁠ω⁠･⁠(⁠-⁠ω⁠-⁠)`}</Text>
         </Link>
       </View>
-      <Link
-        href="/profile"
-        className={`mt-5 font-bold bg-baccent/80 ${isDark ? "text-appwhite" : "text-appblack"} py-2 rounded-lg text-lg text-center flex`}
-      >
-        <Text>Go back</Text>
-      </Link>
 
       <View className="absolute bottom-6 left-0 right-0 overflow-hidden items-center">
         <Text className="text-appgraydark mr-2">rien à redire, bss</Text>
