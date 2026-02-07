@@ -58,6 +58,7 @@ const Guidance = () => {
           <Text>Pixel perfect</Text>
         </Link>
       </View>
+      {/* 
       <Text className={`${isDark ? "text-appwhite" : "text-appblack"} my-2`}>
         Dr. Dykshoorn
       </Text>
@@ -83,6 +84,7 @@ const Guidance = () => {
           }}
         />
       </View>
+      */}
       <View className="flex flex-row">
         <View className="mr-2">
           <Text
@@ -94,8 +96,8 @@ const Guidance = () => {
             source={require("../assets/images/portrait.jpeg")}
             className="object-scale-down"
             style={{
-              width: 90,
-              height: 120,
+              width: 110,
+              height: 140,
             }}
           />
         </View>
@@ -109,8 +111,8 @@ const Guidance = () => {
             source={require("../assets/images/boy.jpeg")}
             className="object-scale-down"
             style={{
-              width: 90,
-              height: 120,
+              width: 110,
+              height: 140,
             }}
           />
         </View>
@@ -125,9 +127,11 @@ const Guidance = () => {
         </Link>
       </View>
 
+      {/* 
       <View className="absolute bottom-6 left-0 right-0 overflow-hidden items-center">
         <Text className="text-appgraydark mr-2">rien à redire, bss</Text>
       </View>
+      */}
     </View>
   );
 };

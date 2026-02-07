@@ -7,6 +7,9 @@
    <a href="https://play.google.com/store/apps/details?id=com.prmntr.teachassist">
      <img src="https://i.ibb.co/sr86bN4/image.png" height="45"/>
    </a>
+   <a href="https://apps.apple.com/us/app/teachassist-check-your-grades/id6758636625">
+     <img src="https://i.ibb.co/rGSqwLPT/image.png" height="45"/>
+   </a>
  </div>
  <div style="padding-top: 10px;"> 
    <p align="center">
@@ -43,7 +46,7 @@ TeachAssist provides students with an open source streamlined mobile experience 
 ### Coming Soon
 - ⏹️ **Widgets** - See your marks at a glance without ever opening the app
 - 🧑‍💻 **API** - Interface with the TeachAssist website through code
-- 🍎 **iOS Support** - Support for Apple devices
+- 🌐 **Web Support** - Use TeachAssist within a web browser
 
 ## Screenshots
 
@@ -69,8 +72,8 @@ TeachAssist provides students with an open source streamlined mobile experience 
 
 ### For Users
 - **Android: [Play Store](https://play.google.com/store/apps/details?id=com.prmntr.teachassist)**
-- **Web: [TeachAssist](https://prmntr.com/teachassist)**
-- **iOS: [Coming Soon](/)**
+- **iOS: [App Store](https://apps.apple.com/us/app/teachassist-check-your-grades/id6758636625)**
+- **Web: [Coming Soon](/)**
 
 ### For Developers
 

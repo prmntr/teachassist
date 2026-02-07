@@ -522,9 +522,18 @@ const findMatchingCourse = (course: Course, cached: Course[]) => {
     const byId = cached.find((item) => item.subjectId === course.subjectId);
     if (byId) return byId;
   }
-  return cached.find(
+  const exact = cached.find(
     (item) =>
       item.courseCode === course.courseCode && item.semester === course.semester
+  );
+  if (exact) return exact;
+
+  if (course.semester === 0) {
+    return cached.find((item) => item.courseCode === course.courseCode);
+  }
+
+  return cached.find(
+    (item) => item.courseCode === course.courseCode && item.semester === 0
   );
 };
 

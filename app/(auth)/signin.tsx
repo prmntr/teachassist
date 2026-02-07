@@ -3,15 +3,20 @@ import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  Linking,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
 import BackButton from "../(components)/Back";
-import { useTheme } from "../contexts/ThemeContext";
+import { appVersionNumber } from "../(utils)/appVersion";
 import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
+import { runVersionCheck } from "../(utils)/versionCheck";
+import { ensureVpnDisabled } from "../(utils)/vpn";
+import { useTheme } from "../contexts/ThemeContext";
 // Sign in screen
 
 const SignInScreen = () => {
@@ -24,7 +29,7 @@ const SignInScreen = () => {
   const { isDark } = useTheme();
 
   // simple client side error checking
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (username === "" || password === "") {
       setMessage("Please enter a student ID and password.");
       hapticsNotification(Haptics.NotificationFeedbackType.Error);
@@ -32,6 +37,11 @@ const SignInScreen = () => {
     } else if (!/^\d+$/.test(username)) {
       // regex i stole, check for numbers and at least 1 number
       setMessage("Username must be a number.");
+      hapticsNotification(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    const vpnOk = await ensureVpnDisabled();
+    if (!vpnOk) {
       hapticsNotification(Haptics.NotificationFeedbackType.Error);
       return;
     }
@@ -46,6 +56,7 @@ const SignInScreen = () => {
         "marks_last_retrieved",
         new Date().toISOString(),
       );
+      await runVersionCheck(appVersionNumber);
       hapticsNotification(Haptics.NotificationFeedbackType.Success);
       router.replace("/courses");
     } else {
@@ -74,6 +85,19 @@ const SignInScreen = () => {
       className={`flex-1 justify-center items-center ${isDark ? "bg-dark1" : "bg-light1"} px-6`}
     >
       <BackButton path={"/onboarding"} />
+      <TouchableOpacity
+        className={`absolute top-13 right-5 flex flex-row items-center z-50 gap-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-2 py-2 shadow-md`}
+        onPress={() => {
+          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+          Linking.openURL("https://prmntr.com/teachassist#support");
+        }}
+      >
+        <Image
+          source={require("../../assets/images/support-help.png")}
+          className="w-8 h-8"
+          style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
+        />
+      </TouchableOpacity>
       <Text
         className={`text-4xl font-light ${isDark ? "text-appwhite" : "text-appblack"} mb-2 text-center`}
       >

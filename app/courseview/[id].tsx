@@ -43,6 +43,7 @@ const CourseViewScreen = () => {
 
   const [courseData, setCourseData] = useState<ParsedCourseData | null>(null);
   const [storedCourses, setStoredCourses] = useState<Course[]>([]);
+  const [isDemoAccount, setIsDemoAccount] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("Loading...");
   const [activeTab, setActiveTab] = useState<"courses" | "analytics">(
@@ -73,6 +74,14 @@ const CourseViewScreen = () => {
   useEffect(() => {
     const loadStoredCourses = async () => {
       const storedCoursesJson = await SecureStorage.load("ta_courses");
+      const demoFlag = await SecureStorage.load("ta_is_demo");
+      if (demoFlag === "true") {
+        setIsDemoAccount(true);
+      } else {
+        const username = await SecureStorage.load("ta_username");
+        const password = await SecureStorage.load("ta_password");
+        setIsDemoAccount(username === "123456789" && password === "password");
+      }
       if (!storedCoursesJson) {
         setStoredCourses([]);
         return;
@@ -611,7 +620,7 @@ const CourseViewScreen = () => {
         setCourseData({
           assignments: [
             {
-              name: "Mid Semester Quest",
+              name: "Mock Assignment",
               categories: {
                 K: null,
                 T: null,
@@ -624,10 +633,10 @@ const CourseViewScreen = () => {
                 },
               },
               feedback:
-                "This is a pretty skibidi quest. You did really well. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum cursus eleifend. Aliquam eleifend eleifend nunc, sit amet interdum dui fringilla in. ",
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum cursus eleifend. Aliquam eleifend eleifend nunc, sit amet interdum dui fringilla in. ",
             },
             {
-              name: "Research Report: What Was The Dog Doing?",
+              name: "Research Report: Doggy ski buddy",
               categories: {
                 K: null,
                 T: null,
@@ -668,7 +677,7 @@ const CourseViewScreen = () => {
               formative: true,
             },
             {
-              name: "Research Conference",
+              name: "Why Tim Cook is the best CEO of all time",
               categories: {
                 K: {
                   score: "8 / 8",
@@ -776,7 +785,7 @@ const CourseViewScreen = () => {
               final: "30%",
             },
           },
-          courseName: "English (ENG2D1)",
+          courseName: "DemoCourse",
           success: true,
         });
         setIsLoading(false);
@@ -1937,11 +1946,109 @@ const CourseViewScreen = () => {
               {/* grade summary */}
               {courseData.summary && (
                 <View className="mb-6">
-                  <QuickCourse
-                    courses={storedCourses}
-                    subjectId={subjectIdValue}
-                    overrideCourseMark={courseAverage}
-                  />
+                  {isDemoAccount ? (
+                    <View
+                      className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl p-6 w-full relative overflow-hidden`}
+                    >
+                      <View className="flex-row justify-between gap-4">
+                        {/* Left content - takes remaining space */}
+                        <View style={{ zIndex: 1, flex: 1 }}>
+                          <View className="flex-row items-center justify-between mb-1">
+                            <View className="flex-row items-center">
+                              <View
+                                className={`w-2 h-2 ${
+                                  isDark ? "bg-appwhite/60" : "bg-appblack"
+                                } rounded-full mr-2`}
+                              />
+                              <Text
+                                className={`${
+                                  isDark ? "text-appwhite/60" : "text-appblack"
+                                } text-sm font-normal`}
+                              >
+                                Excellent Performance
+                              </Text>
+                            </View>
+                          </View>
+
+                          <Text
+                            className={`${isDark ? "text-appwhite" : "text-appblack"}`}
+                          >
+                            Period 2
+                          </Text>
+
+                          <Text
+                            className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold`}
+                          >
+                            Demonstration Course
+                          </Text>
+
+                          <Text
+                            className={`${isDark ? "text-appwhite/80" : "text-appblack/80"}`}
+                          >
+                            ENG2D1 • Room 999
+                          </Text>
+
+                          <View className="flex-row items-center mt-3 flex-wrap">
+                            <View
+                              className="mr-2 bg-baccent/90 rounded-lg px-3 py-1 mb-2"
+                              style={{ alignSelf: "flex-start" }}
+                            >
+                              <Text className="text-appblack text-sm font-medium">
+                                Midterm 86%
+                              </Text>
+                            </View>
+
+                            <View
+                              className="bg-success/90 rounded-lg px-3 py-1 mb-2"
+                              style={{ alignSelf: "flex-start" }}
+                            >
+                              <Text className="text-appblack text-sm font-medium">
+                                Final 91%
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+
+                        {/* Right content - fixed width */}
+                        <View style={{ flexShrink: 0 }} className="mt-10">
+                          <View className="items-center justify-center">
+                            <AnimatedProgressWheel
+                              size={90}
+                              width={10}
+                              color={"#2faf7f"}
+                              backgroundColor={isDark ? "#232427" : "#e7e7e9"}
+                              progress={91}
+                              max={100}
+                              rounded={true}
+                              rotation={"-90deg"}
+                              duration={400}
+                              delay={75}
+                              // label is bad
+                              showProgressLabel={false}
+                            />
+
+                            <View className="absolute">
+                              <Text
+                                style={{
+                                  color: "#2faf7f",
+                                  fontSize: 17,
+                                  fontWeight: "600",
+                                }}
+                              >
+                                {90.8}%{/* TA only has up to 1 */}
+                              </Text>
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <QuickCourse
+                      courses={storedCourses}
+                      subjectId={subjectIdValue}
+                      overrideCourseMark={courseAverage}
+                    />
+                  )}
                 </View>
               )}
 

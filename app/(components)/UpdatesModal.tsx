@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { SecureStorage } from "../(auth)/taauth";
 import { hapticsImpact } from "../(utils)/haptics";
+import { appVersionLabel } from "../(utils)/appVersion";
 import { useTheme } from "../contexts/ThemeContext";
 
 interface UpdateItem {
@@ -30,7 +31,7 @@ interface UpdatesModalProps {
 const UpdatesModal: React.FC<UpdatesModalProps> = ({
   visible,
   onClose,
-  version = "1.3.2",
+  version = appVersionLabel,
   updates,
   username,
 }) => {

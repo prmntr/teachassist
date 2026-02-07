@@ -18,13 +18,26 @@ const hasVisibleGrade = (course: Course): boolean => {
 const findCachedMatch = (
   freshCourse: Course,
   cachedById: Map<string, Course>,
-  cachedByCode: Map<string, Course>
+  cachedByCode: Map<string, Course>,
+  cachedByCourseCode: Map<string, Course>
 ): Course | undefined => {
   if (freshCourse.subjectId) {
     const byId = cachedById.get(buildCourseKey(freshCourse));
     if (byId) return byId;
   }
-  return cachedByCode.get(buildCourseCodeKey(freshCourse));
+  const byCode = cachedByCode.get(buildCourseCodeKey(freshCourse));
+  if (byCode) return byCode;
+
+  if (freshCourse.semester === 0) {
+    return cachedByCourseCode.get(freshCourse.courseCode);
+  }
+
+  const loose = cachedByCourseCode.get(freshCourse.courseCode);
+  if (loose?.semester === 0) {
+    return loose;
+  }
+
+  return undefined;
 };
 
 export const mergeCoursesWithCache = (
@@ -33,20 +46,38 @@ export const mergeCoursesWithCache = (
 ): Course[] => {
   const cachedById = new Map<string, Course>();
   const cachedByCode = new Map<string, Course>();
+  const cachedByCourseCode = new Map<string, Course>();
+  const freshIdKeys = new Set<string>();
+  const freshCodeKeys = new Set<string>();
+  const freshSchoolYearCodes = new Set<string>();
 
   cachedCourses.forEach((course) => {
     cachedByCode.set(buildCourseCodeKey(course), course);
+    if (!cachedByCourseCode.has(course.courseCode) || course.semester === 0) {
+      cachedByCourseCode.set(course.courseCode, course);
+    }
     const key = buildCourseKey(course);
     if (course.subjectId) {
       cachedById.set(key, course);
     }
   });
 
-  return freshCourses.map((freshCourse) => {
+  freshCourses.forEach((course) => {
+    freshCodeKeys.add(buildCourseCodeKey(course));
+    if (course.semester === 0) {
+      freshSchoolYearCodes.add(course.courseCode);
+    }
+    if (course.subjectId) {
+      freshIdKeys.add(buildCourseKey(course));
+    }
+  });
+
+  const mergedFresh = freshCourses.map((freshCourse) => {
     const cachedCourse = findCachedMatch(
       freshCourse,
       cachedById,
-      cachedByCode
+      cachedByCode,
+      cachedByCourseCode
     );
     if (!cachedCourse) {
       return { ...freshCourse, isGradeStale: false };
@@ -81,6 +112,24 @@ export const mergeCoursesWithCache = (
     merged.isGradeStale = false;
     return merged;
   });
+
+  const staleCached = cachedCourses
+    .filter((cachedCourse) => {
+      const idKey = cachedCourse.subjectId
+        ? buildCourseKey(cachedCourse)
+        : null;
+      if (idKey && freshIdKeys.has(idKey)) return false;
+      if (freshSchoolYearCodes.has(cachedCourse.courseCode)) {
+        return false;
+      }
+      return !freshCodeKeys.has(buildCourseCodeKey(cachedCourse));
+    })
+    .map((cachedCourse) => ({
+      ...cachedCourse,
+      isGradeStale: true,
+    }));
+
+  return [...mergedFresh, ...staleCached];
 };
 
 export const resolveReportUrl = (reportUrl: string): string => {

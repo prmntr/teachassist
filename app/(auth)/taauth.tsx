@@ -2,11 +2,63 @@ import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useRef } from "react";
 import { parseStudentGrades } from "../(components)/CourseParser";
-import { resolveReportUrl } from "../(utils)/courseCache";
+import { mergeCoursesWithCache, resolveReportUrl } from "../(utils)/courseCache";
 
 // every interaction to the outside world should be passed through here
 
 const INDEX_URL = "https://ta.yrdsb.ca/live/index.php?subject_id=0";
+const DEMO_USERNAME = "123456789";
+const DEMO_PASSWORD = "password";
+
+const isDemoCredentials = (
+  username?: string | null,
+  password?: string | null
+) => username === DEMO_USERNAME && password === DEMO_PASSWORD;
+
+const isDemoAccount = async (): Promise<boolean> => {
+  const storedFlag = await SecureStorage.load("ta_is_demo");
+  if (storedFlag === "true") return true;
+  const storedUsername = await SecureStorage.load("ta_username");
+  const storedPassword = await SecureStorage.load("ta_password");
+  return isDemoCredentials(storedUsername, storedPassword);
+};
+
+const formatDateForGuidance = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const buildDemoGuidanceHtml = (date: Date): string => {
+  const dateString = formatDateForGuidance(date);
+  const demoSlotsA = ["09:00:00", "10:30:00", "13:15:00", "15:00:00"];
+  const demoSlotsB = ["09:45:00", "11:00:00", "14:00:00", "15:30:00"];
+  const buildLinks = (slots: string[], startId: number) =>
+    slots
+      .map(
+        (time, index) =>
+          `<a href="bookAppointment.php?dt=${dateString}&tm=${time}&id=${
+            startId + index
+          }&school_id=0">@ ${time}</a>`
+      )
+      .join("");
+
+  return `
+<html>
+  <body>
+    <h2>Appointment Bookings on ${dateString}</h2>
+    <div class="box">
+      <h3>Ms. Demo: Guidance (A-D)</h3>
+      ${buildLinks(demoSlotsA, 1000)}
+    </div>
+    <div class="box">
+      <h3>Mr. Sample: Guidance (E-Z)</h3>
+      ${buildLinks(demoSlotsB, 2000)}
+    </div>
+  </body>
+</html>`;
+};
 
 // wrapper for expo-secure-store
 export class SecureStorage {
@@ -567,9 +619,10 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       const encodedPassword = encodeURIComponent(password);
 
       // example login
-      if (encodedPassword === "password" && encodedUsername === "123456789") {
+      if (encodedPassword === DEMO_PASSWORD && encodedUsername === DEMO_USERNAME) {
         await SecureStorage.save("ta_username", username);
         await SecureStorage.save("ta_password", password);
+        await SecureStorage.save("ta_is_demo", "true");
         await SecureStorage.save("ta_student_id", "");
         await SecureStorage.save("ta_session_token", "");
         await SecureStorage.save(
@@ -658,6 +711,21 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       }
 
       const coursesHtmlString: string = parseStudentGrades(html);
+      let mergedCoursesJson = coursesHtmlString;
+      try {
+        const freshCourses = JSON.parse(coursesHtmlString);
+        const cachedCoursesJson = await SecureStorage.load("ta_courses");
+        if (cachedCoursesJson) {
+          const cachedCourses = JSON.parse(cachedCoursesJson);
+          const mergedCourses = mergeCoursesWithCache(
+            Array.isArray(freshCourses) ? freshCourses : [],
+            Array.isArray(cachedCourses) ? cachedCourses : []
+          );
+          mergedCoursesJson = JSON.stringify(mergedCourses);
+        }
+      } catch {
+        // fall back to fresh courses only
+      }
       const schoolId = html.match(/school_id=(\d+)/)?.[1] ?? null;
 
       const cookieSession = await syncStoredSessionFromCookies();
@@ -688,12 +756,13 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
       await SecureStorage.save("ta_username", username);
       await SecureStorage.save("ta_password", password);
-      await SecureStorage.save("ta_courses", coursesHtmlString);
+      await SecureStorage.save("ta_is_demo", "false");
+      await SecureStorage.save("ta_courses", mergedCoursesJson);
       await SecureStorage.save("school_id", schoolId);
       await fetchSchoolName(schoolId);
 
       if (shouldPrefetch) {
-        await prefetchCourseReports(coursesHtmlString);
+        await prefetchCourseReports(mergedCoursesJson);
       }
 
       return { success: true };
@@ -794,14 +863,31 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           ) {
             try {
               const coursesJsonString = parseStudentGrades(html);
-              await SecureStorage.save("ta_courses", coursesJsonString);
+              let mergedCoursesJson = coursesJsonString;
+              try {
+                const freshCourses = JSON.parse(coursesJsonString);
+                const cachedCoursesJson =
+                  await SecureStorage.load("ta_courses");
+                if (cachedCoursesJson) {
+                  const cachedCourses = JSON.parse(cachedCoursesJson);
+                  const mergedCourses = mergeCoursesWithCache(
+                    Array.isArray(freshCourses) ? freshCourses : [],
+                    Array.isArray(cachedCourses) ? cachedCourses : []
+                  );
+                  mergedCoursesJson = JSON.stringify(mergedCourses);
+                }
+              } catch {
+                // fall back to fresh courses only
+              }
+
+              await SecureStorage.save("ta_courses", mergedCoursesJson);
 
               const schoolIdFromHtml = html.match(/school_id=(\d+)/)?.[1];
               if (schoolIdFromHtml) {
                 await SecureStorage.save("school_id", schoolIdFromHtml);
               }
 
-              await prefetchCourseReports(coursesJsonString);
+              await prefetchCourseReports(mergedCoursesJson);
             } catch {
               // fall through and just return the HTML
             }
@@ -813,6 +899,10 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         }
 
         if (getGuidance) {
+          if (await isDemoAccount()) {
+            safeOnResult(buildDemoGuidanceHtml(getGuidance));
+            return;
+          }
           const savedStudentId = await SecureStorage.load("ta_student_id");
           const savedSchoolId = await SecureStorage.load("school_id");
           const storedCookieHeader = await SecureStorage.load("ta_cookies");
@@ -830,14 +920,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             return;
           }
 
-          const formatDateForAPI = (date: Date): string => {
-            const year = date.getFullYear();
-            const month = String(date.getMonth() + 1).padStart(2, "0");
-            const day = String(date.getDate()).padStart(2, "0");
-            return `${year}-${month}-${day}`;
-          };
-
-          const guidanceDate = formatDateForAPI(getGuidance);
+          const guidanceDate = formatDateForGuidance(getGuidance);
           console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
           const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`;
 
@@ -860,6 +943,19 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         }
 
         if (bookAppointment) {
+          if (await isDemoAccount()) {
+            const cleanedUrl = decodeHtmlEntities(bookAppointment);
+            const appointmentDetails = extractAppointmentFromUrl(cleanedUrl);
+            await saveAppointmentData({
+              ...appointmentDetails,
+              schoolId: appointmentDetails.schoolId || "0",
+              reason: "Guidance Appointment",
+              teacher: appointmentMeta?.teacher,
+              subject: appointmentMeta?.subject,
+            });
+            safeOnResult("Appointment booked successfully!");
+            return;
+          }
           console.log("taauth: Processing appointment booking response");
           const cleanedUrl = decodeHtmlEntities(bookAppointment);
           const { html } = await fetchHtmlWithAutoReauth(cleanedUrl);
@@ -900,6 +996,13 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         }
 
         if (cancelAppointment) {
+          if (await isDemoAccount()) {
+            if (cancelAppointment.id) {
+              await removeAppointmentData(cancelAppointment.id);
+            }
+            safeOnResult("Appointment cancelled successfully!");
+            return;
+          }
           console.log("taauth: Processing appointment cancellation response");
           const { date, time, id, schoolId } = cancelAppointment;
           const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?dt=${date}&tm=${time}&id=${id}&school_id=${schoolId}&action=cancel`;
@@ -934,6 +1037,29 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         }
 
         if (submitAppointmentForm) {
+          if (await isDemoAccount()) {
+            if (submitAppointmentForm.hiddenFields) {
+              const appointmentDetails = {
+                date:
+                  submitAppointmentForm.hiddenFields.dt ||
+                  submitAppointmentForm.hiddenFields.inputDate ||
+                  "",
+                time: submitAppointmentForm.hiddenFields.tm || "",
+                id:
+                  submitAppointmentForm.hiddenFields.id ||
+                  Date.now().toString(),
+                schoolId: submitAppointmentForm.hiddenFields.school_id || "0",
+                reason: submitAppointmentForm.reason || "Guidance Appointment",
+                teacher: appointmentMeta?.teacher,
+                subject:
+                  submitAppointmentForm.reasonLabel ?? appointmentMeta?.subject,
+              };
+
+              await saveAppointmentData(appointmentDetails);
+            }
+            safeOnResult("Appointment booked successfully!");
+            return;
+          }
           console.log("taauth: Processing form submission response");
           const formDataString = createFormDataString(submitAppointmentForm);
           const { html } = await fetchHtmlWithAutoReauth(

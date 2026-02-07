@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { useFocusEffect } from "@react-navigation/native";
-import Constants from "expo-constants";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -24,17 +23,26 @@ import Messages from "../(components)/Messages";
 import { CourseInfoBox } from "../(components)/QuickCourse";
 import { SnowEffect } from "../(components)/SnowEffect";
 import UpdatesModal from "../(components)/UpdatesModal";
+import VersionUpdateModal from "../(components)/VersionUpdateModal";
+import { appVersionLabel, appVersionNumber } from "../(utils)/appVersion";
 import { mergeCoursesWithCache } from "../(utils)/courseCache";
 import { useTheme } from "../contexts/ThemeContext";
 import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
+import {
+  loadVersionCheckState,
+  markVersionPromptDismissed,
+  runVersionCheck,
+  shouldShowUpdatePrompt,
+  type VersionUpdateMode,
+} from "../(utils)/versionCheck";
 
 const CoursesScreen = () => {
   const [showUpdates, setShowUpdates] = useState(false);
-  const rawAppVersion =
-    Constants.expoConfig?.version ?? Constants.nativeAppVersion ?? "1.3.2"; // keep in sync with app.json
-  const appVersion = rawAppVersion.startsWith("v")
-    ? rawAppVersion
-    : `v${rawAppVersion}`;
+  const appVersion = appVersionLabel;
+  const [showVersionUpdate, setShowVersionUpdate] = useState(false);
+  const [updateMode, setUpdateMode] = useState<VersionUpdateMode>("none");
+  const [updateLatest, setUpdateLatest] = useState<string | null>(null);
+  const [updateMinimum, setUpdateMinimum] = useState<string | null>(null);
 
   // Show UpdatesModal once per app update
   useEffect(() => {
@@ -52,6 +60,24 @@ const CoursesScreen = () => {
     };
     checkAndShowUpdates();
   }, [appVersion]);
+
+  useEffect(() => {
+    const loadUpdatePrompt = async () => {
+      const state = await loadVersionCheckState();
+      setUpdateMode(state.mode);
+      setUpdateLatest(state.latest);
+      setUpdateMinimum(state.minimum);
+      if (shouldShowUpdatePrompt(state.mode, state.latest, state.dismissedFor)) {
+        setShowVersionUpdate(true);
+      }
+    };
+    loadUpdatePrompt();
+    runVersionCheck(appVersionNumber)
+      .then(loadUpdatePrompt)
+      .catch(() => {
+        // Ignore network failures; keep cached state.
+      });
+  }, []);
   const { isDark } = useTheme();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -115,6 +141,7 @@ const CoursesScreen = () => {
   // Christmas
   const now = new Date();
   const year = now.getFullYear();
+  const schoolYearStart = now.getMonth() >= 7 ? year : year - 1;
   const start = new Date(year, 11, 20); // Dec 20
   const end = new Date(
     year + (now.getMonth() === 0 ? -1 : 0),
@@ -318,22 +345,41 @@ const CoursesScreen = () => {
   const semester2Courses = visibleCourses.filter(
     (course) => course.semester === 2,
   );
+  const schoolYearCourses = visibleCourses.filter(
+    (course) => course.semester === 0,
+  );
+  const hasSemesterCourses =
+    semester1Courses.length > 0 || semester2Courses.length > 0;
+  const showSchoolYearOnly =
+    !hasSemesterCourses && schoolYearCourses.length > 0;
   const showSemester2First =
-    now >= new Date(year, 1, 2) &&
-    now <= new Date(year, 5, 30, 23, 59, 59, 999);
+    now >= new Date(schoolYearStart + 1, 1, 2) &&
+    now <= new Date(schoolYearStart + 1, 5, 30, 23, 59, 59, 999);
 
-  const renderSemesterCourses = (semester: 1 | 2, list: Course[]) => {
+  const renderSemesterCourses = (label: string, list: Course[]) => {
     if (list.length === 0) return null;
     return (
       <View>
-        <View className={`${semester === 1 ? "mt-8" : "mt-4"}`}>
+        <View
+          className={`${
+            label === "Semester 1" || label === "School Year" ? "mt-8" : "mt-4"
+          }`}
+        >
           <Text
             className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-medium`}
           >
-            Semester{" "}
-            <Text className={`text-baccent text-2xl font-bold`}>
-              {semester}
-            </Text>
+            {label.startsWith("Semester") ? (
+              <>
+                Semester{" "}
+                <Text className={`text-baccent text-2xl font-bold`}>
+                  {label.replace("Semester ", "")}
+                </Text>
+              </>
+            ) : (
+              <Text className={`text-baccent text-2xl font-bold`}>
+                {label}
+              </Text>
+            )}
           </Text>
           <Text
             className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-md mb-2`}
@@ -393,8 +439,18 @@ const CoursesScreen = () => {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <VersionUpdateModal
+        visible={showVersionUpdate}
+        mode={updateMode}
+        latestVersion={updateLatest}
+        minimumVersion={updateMinimum}
+        onClose={async () => {
+          setShowVersionUpdate(false);
+          await markVersionPromptDismissed(updateLatest);
+        }}
+      />
       <UpdatesModal
-        visible={showUpdates}
+        visible={showUpdates && !showVersionUpdate && updateMode !== "required"}
         onClose={() => setShowUpdates(false)}
         version={appVersion}
       />
@@ -459,17 +515,20 @@ const CoursesScreen = () => {
               refreshToken={marksLastRetrieved ?? undefined}
             />
           </View>
-          {showSemester2First ? (
+          {showSchoolYearOnly ? (
+            <>{renderSemesterCourses("School Year", schoolYearCourses)}</>
+          ) : showSemester2First ? (
             <>
-              {renderSemesterCourses(2, semester2Courses)}
-              {renderSemesterCourses(1, semester1Courses)}
+              {renderSemesterCourses("Semester 2", semester2Courses)}
+              {renderSemesterCourses("Semester 1", semester1Courses)}
             </>
           ) : (
             <>
-              {renderSemesterCourses(1, semester1Courses)}
-              {renderSemesterCourses(2, semester2Courses)}
+              {renderSemesterCourses("Semester 1", semester1Courses)}
+              {renderSemesterCourses("Semester 2", semester2Courses)}
             </>
           )}
+          {/* 
           <TouchableOpacity
             className={`mb-10 mt-3 p-3`}
             onPress={() =>
@@ -480,6 +539,7 @@ const CoursesScreen = () => {
               leave a review for +10% luck on ur next test :D
             </Text>
           </TouchableOpacity>
+          */}
         </ScrollView>
       )}
 

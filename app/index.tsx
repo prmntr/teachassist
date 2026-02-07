@@ -14,7 +14,9 @@ import {
   View,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "./(auth)/taauth";
+import { appVersionNumber } from "./(utils)/appVersion";
 import { hapticsImpact } from "./(utils)/haptics";
+import { ensureVpnDisabled } from "./(utils)/vpn";
 import { useTheme } from "./contexts/ThemeContext";
 import "./global.css";
 
@@ -70,6 +72,11 @@ const InitialRoute = () => {
       }
 
       if (savedUsername && savedPassword) {
+        const vpnOk = await ensureVpnDisabled();
+        if (!vpnOk) {
+          setIsCheckingAuth(false);
+          return;
+        }
         // try and auto login
         setSavedCredentials({
           username: savedUsername,
@@ -210,7 +217,7 @@ const InitialRoute = () => {
             <Text
               className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg text-center font-light`}
             >
-              unofficial client for yrdsb
+              unofficial client for TA
             </Text>
           </View>
           {/* 
@@ -261,8 +268,10 @@ const InitialRoute = () => {
               />
             </View>
           </TouchableOpacity>
-          <Text className={`text-baccent text-lg mt-6 text-center`}>
-            Version 1.3.2
+          <Text
+            className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg mt-6 text-center`}
+          >
+            Version {appVersionNumber}
           </Text>
         </View>
       </View>

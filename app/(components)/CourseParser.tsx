@@ -257,15 +257,58 @@ function parseDateRange(text: string, course: Partial<Course>): void {
 
     if (startDate && isDateString(startDate)) {
       course.startDate = startDate;
-
-      // Determine semester based on start month
-      const startMonth = parseInt(startDate.split("-")[1], 10);
-      course.semester = startMonth === 8 || startMonth === 9 ? 1 : 2;
     }
     if (endDate && isDateString(endDate)) {
       course.endDate = endDate;
     }
+
+    if (startDate && endDate && isDateString(startDate) && isDateString(endDate)) {
+      course.semester = determineSemester(startDate, endDate);
+    }
   }
+}
+
+function determineSemester(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate}T23:59:59`);
+  const startYear = start.getFullYear();
+  const startMonth = start.getMonth();
+  const schoolYearStart = startMonth >= 7 ? startYear : startYear - 1;
+  const bufferMs = 5 * 24 * 60 * 60 * 1000;
+
+  const sem1Start = new Date(schoolYearStart, 7, 1); // Aug 1
+  const sem1End = new Date(
+    schoolYearStart + 1,
+    0,
+    31,
+    23,
+    59,
+    59,
+    999
+  ); // Jan 31
+  const sem2Start = new Date(schoolYearStart + 1, 1, 1); // Feb 1
+  const sem2End = new Date(
+    schoolYearStart + 1,
+    5,
+    30,
+    23,
+    59,
+    59,
+    999
+  ); // Jun 30
+
+  const isSem1 =
+    start.getTime() >= sem1Start.getTime() - bufferMs &&
+    end.getTime() <= sem1End.getTime() + bufferMs;
+  if (isSem1) return 1;
+
+  const isSem2 =
+    start.getTime() >= sem2Start.getTime() - bufferMs &&
+    end.getTime() <= sem2End.getTime() + bufferMs;
+  if (isSem2) return 2;
+
+  // Non-semester system (full-year or out-of-range dates)
+  return 0;
 }
 
 function parseGradeInfo(

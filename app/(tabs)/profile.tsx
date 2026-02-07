@@ -20,6 +20,7 @@ import {
 import { SecureStorage } from "../(auth)/taauth";
 import { SnowEffect } from "../(components)/SnowEffect";
 import UpdatesModal from "../(components)/UpdatesModal";
+import { appVersionLabel } from "../(utils)/appVersion";
 import {
   getBiometricLockEnabled,
   setBiometricLockEnabled as persistBiometricLockEnabled,
@@ -125,7 +126,7 @@ const DEFAULT_QUICK_ACTIONS: QuickAction[] = [
     title: "Google Classroom",
     url:
       Platform.OS === "ios" || Platform.OS === "macos"
-        ? "itms-apps://apps.apple.com/app/id924620788"
+        ? "https://apps.apple.com/us/app/google-classroom/id924620788"
         : "market://details?id=com.google.android.apps.classroom",
     iconKey: "classroom",
     kind: "external",
@@ -180,8 +181,6 @@ const normalizeQuickActions = (actions: QuickAction[]) => {
 
 const ProfileScreen = () => {
   const router = useRouter();
-
-  const appVersion = "v1.3.2"; //* update w/ app.json
 
   const { theme, toggleTheme, isDark } = useTheme();
 
@@ -705,7 +704,7 @@ const ProfileScreen = () => {
       <UpdatesModal
         visible={showUpdates}
         onClose={() => setShowUpdates(false)}
-        version={appVersion.replace(/^v/, "")}
+        version={appVersionLabel}
         username={userName}
       />
       <Modal visible={showTestingInfo} transparent animationType="slide">
@@ -734,17 +733,17 @@ const ProfileScreen = () => {
             <Text
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
             >
-              Notifications work by periodically contacting the TeachAssist
-              servers and checking for grade updates. The interval between
-              checking is about every 15-20 minutes. This feature being tested.
+              Notifications work by contacting the TeachAssist
+              servers and checking for grade updates every 15-20 minutes.
+              This feature being tested.
               {`\n\n`}
               <Text className="font-semibold text-baccent">
                 Note: Notifications may fail to run with an active VPN to a
                 country outside of Canada, or with battery optimizations for
-                TeachAssist turned on.{" "}
+                TeachAssist turned on.
                 {Platform.OS === "ios" || Platform.OS === "macos"
-                  ? "ios"
-                  : "android"}
+                  ? " The feature is expected to be unstable on iOS devices."
+                  : ""}
               </Text>
             </Text>
             <TouchableOpacity
@@ -1538,12 +1537,12 @@ const ProfileScreen = () => {
                   action: () => setShowUpdates(true),
                 },
                 {
-                  title: "Leave a Review",
-                  subtitle: "Leave a review for TeachAssist",
+                  title: "TeachAssist Website",
+                  subtitle: "Visit the TeachAssist Website",
                   icon: require("../../assets/images/star.png"),
                   action: () =>
                     Linking.openURL(
-                      "market://details?id=com.prmntr.teachassist",
+                      "https://prmntr.com/teachassist",
                     ),
                 },
               ].map((item, index) => (
@@ -1938,7 +1937,7 @@ const ProfileScreen = () => {
               <Text
                 className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm mb-2`}
               >
-                {appVersion}
+                {appVersionLabel}
               </Text>
               <View className="flex-row">
                 <TouchableOpacity

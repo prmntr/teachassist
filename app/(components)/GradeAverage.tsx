@@ -9,7 +9,7 @@ import { Course } from "./CourseParser";
 // TODO: connect w/ notifs
 
 interface GradeStats {
-  currentAverage: number;
+  currentAverage: number | null;
   previousAverage: number | null;
   courseCount: number;
   lastRetrieved: string | null;
@@ -75,6 +75,49 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
     return "same";
   };
 
+  const isDateWithinRange = (date: Date, start?: string, end?: string) => {
+    if (!start || !end) return false;
+    const startDate = new Date(`${start}T00:00:00`);
+    const endDate = new Date(`${end}T23:59:59`);
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return false;
+    }
+    return date >= startDate && date <= endDate;
+  };
+
+  const getActiveSemester = (courses: Course[]): 1 | 2 => {
+    const now = new Date();
+    const activeCourse = courses.find((course) =>
+      isDateWithinRange(now, course.startDate, course.endDate)
+    );
+    if (activeCourse?.semester === 1 || activeCourse?.semester === 2) {
+      return activeCourse.semester;
+    }
+
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const schoolYearStart = month >= 7 ? year : year - 1;
+    const bufferMs = 5 * 24 * 60 * 60 * 1000;
+    const sem1Start = new Date(schoolYearStart, 7, 1); // Aug 1
+    const sem1End = new Date(schoolYearStart + 1, 0, 31, 23, 59, 59, 999);
+    const sem2Start = new Date(schoolYearStart + 1, 1, 1); // Feb 1
+    const sem2End = new Date(schoolYearStart + 1, 5, 30, 23, 59, 59, 999);
+
+    if (
+      now.getTime() >= sem2Start.getTime() - bufferMs &&
+      now.getTime() <= sem2End.getTime() + bufferMs
+    ) {
+      return 2;
+    }
+    if (
+      now.getTime() >= sem1Start.getTime() - bufferMs ||
+      now.getTime() <= sem1End.getTime() + bufferMs
+    ) {
+      return 1;
+    }
+    return 2;
+  };
+
   const getTrendColor = (trend: string): string => {
     switch (trend) {
       case "up":
@@ -137,11 +180,17 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
       }
 
       const courses: Course[] = JSON.parse(coursesJson);
-      let currentAverage = calculateAverageFromCourses(courses);
-
-      if (currentAverage === null) {
-        currentAverage = 0.0;
-      }
+      const hasSemesterCourses = courses.some(
+        (course) => course.semester === 1 || course.semester === 2
+      );
+      const hasSchoolYearCourses = courses.some(
+        (course) => course.semester === 0
+      );
+      const useSchoolYearOnly = hasSchoolYearCourses && !hasSemesterCourses;
+      const scopedCourses = useSchoolYearOnly
+        ? courses
+        : courses.filter((course) => course.semester === getActiveSemester(courses));
+      let currentAverage = calculateAverageFromCourses(scopedCourses);
 
       let lastRetrieved: string | null = null;
       try {
@@ -184,51 +233,55 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
       }
 
       // Check if this is a REAL change (not just a refresh)
-      const isRealChange =
-        lastKnownAverage !== null && lastKnownAverage !== currentAverage;
+      if (currentAverage !== null) {
+        const isRealChange =
+          lastKnownAverage !== null && lastKnownAverage !== currentAverage;
 
-      if (isRealChange) {
-        // Real change detected - update the previous average to the last known value
-        if (lastKnownAverage !== null) {
+        if (isRealChange) {
+          // Real change detected - update the previous average to the last known value
+          if (lastKnownAverage !== null) {
+            await SecureStorage.save(
+              "grade_previous_average",
+              lastKnownAverage.toString()
+            );
+            previousAverage = lastKnownAverage; // Update for current calculation
+          }
+        }
+
+        // Always update the last known current average
+        if (lastKnownAverage !== currentAverage) {
+          await SecureStorage.save(
+            "grade_last_known_average",
+            currentAverage.toString()
+          );
+        }
+
+        // Handle first-time setup
+        if (lastKnownAverage === null && previousAverage === null) {
+          await SecureStorage.save(
+            "grade_last_known_average",
+            currentAverage.toString()
+          );
+        }
+
+        // so we save the rn average as last avg
+        console.log(previousAverage, currentAverage);
+        // Only update previous average when there's actually a change
+        if (previousAverage !== null && previousAverage !== currentAverage) {
+          // Keep the old previousAverage, don't overwrite it with currentAverage
+        } else if (previousAverage === null) {
+          // First time setup
           await SecureStorage.save(
             "grade_previous_average",
-            lastKnownAverage.toString()
+            currentAverage.toString()
           );
-          previousAverage = lastKnownAverage; // Update for current calculation
         }
+        // so we save the rn average as last avg
+      } else {
+        previousAverage = null;
       }
 
-      // Always update the last known current average
-      if (lastKnownAverage !== currentAverage) {
-        await SecureStorage.save(
-          "grade_last_known_average",
-          currentAverage.toString()
-        );
-      }
-
-      // Handle first-time setup
-      if (lastKnownAverage === null && previousAverage === null) {
-        await SecureStorage.save(
-          "grade_last_known_average",
-          currentAverage.toString()
-        );
-      }
-
-      // so we save the rn average as last avg
-      console.log(previousAverage, currentAverage);
-      // Only update previous average when there's actually a change
-      if (previousAverage !== null && previousAverage !== currentAverage) {
-        // Keep the old previousAverage, don't overwrite it with currentAverage
-      } else if (previousAverage === null) {
-        // First time setup
-        await SecureStorage.save(
-          "grade_previous_average",
-          currentAverage.toString()
-        );
-      }
-      // so we save the rn average as last avg
-
-      const gradedCourseCount = courses.filter(
+      const gradedCourseCount = scopedCourses.filter(
         (course) =>
           course.hasGrade &&
           course.grade !== "See teacher" &&
@@ -240,7 +293,10 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
         previousAverage,
         courseCount: gradedCourseCount,
         lastRetrieved,
-        trend: determineGradeTrend(currentAverage, previousAverage),
+        trend:
+          currentAverage === null
+            ? "new"
+            : determineGradeTrend(currentAverage, previousAverage),
       };
 
       setGradeStats(stats);
@@ -281,6 +337,15 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
 
   const showAverage = !hideMarksUntilTap || revealAverage;
   const showChange = !hideMarksUntilTap || revealChange;
+  const hasAverage = gradeStats.currentAverage !== null;
+  const averageColor = hasAverage
+    ? gradeStats.currentAverage >= 50
+      ? "#27b1fa"
+      : "#d6363f"
+    : "#9ca3af";
+  const averageLabel = hasAverage
+    ? `${gradeStats.currentAverage.toFixed(1)}%`
+    : "N/A";
 
   return (
     <View
@@ -301,25 +366,25 @@ const GradeAverageTracker: React.FC<GradeAverageTrackerProps> = ({
               <AnimatedProgressWheel
                 size={125}
                 width={13}
-                color={gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f"}
+                color={averageColor}
                 backgroundColor={isDark ? "#232427" : "#e7e7e9"}
-                progress={gradeStats.currentAverage}
+                progress={hasAverage ? gradeStats.currentAverage : 0}
                 max={100}
                 rounded={true}
                 rotation={"-90deg"}
                 delay={75}
                 duration={400}
-                showPercentageSymbol={true}
+                showPercentageSymbol={hasAverage}
               />
               <View className="absolute">
                 <Text
                   style={{
-                    color: gradeStats.currentAverage >= 50 ? "#27b1fa" : "#d6363f",
+                    color: averageColor,
                     fontSize: 24,
                     fontWeight: "600",
                   }}
                 >
-                  {gradeStats.currentAverage.toFixed(1)}%{/* TA only has up to 1 */}
+                  {averageLabel}
                 </Text>
               </View>
             </View>

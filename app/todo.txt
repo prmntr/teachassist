@@ -1,8 +1,6 @@
 TODO LIST
 
 - migrate from TouchableOpacity to touchable
-- why is gluestack not working it worked on all my other projects
-- make haptic feedback more pronounced too soft some models maybe idk
 - edit error messages
 - use safeareas (maybe done)
 - flag is // 1
@@ -11,9 +9,7 @@ TODO LIST
 
 modal problems
 
-clean up comments and code remove redundant stuff (never happening)
-
-ios support coming soon
+clean up
 
 gurt: yo - curgot
 
@@ -23,4 +19,6 @@ fixed overal/culminating bug
 fixed marks of 0 not showing
 
 
-- liquid (gl)ass
+- liquid glass support
+
+fix vpn detector

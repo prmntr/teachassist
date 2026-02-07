@@ -15,6 +15,12 @@ const BackButton: React.FC<BackProps> = ({ path }) => {
       className={`absolute top-15 left-5 flex flex-row items-center z-50 gap-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-4 py-2 shadow-md`}
       onPress={() => {
         hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+        const canGoBack =
+          typeof router.canGoBack === "function" && router.canGoBack();
+        if (canGoBack) {
+          router.back();
+          return;
+        }
         router.replace(path as any);
       }}
     >
