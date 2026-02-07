@@ -26,10 +26,9 @@
  </div>
 </p>
 
-## Overview
+## Overview [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/prmntr/teachassist)
 
 TeachAssist provides students with an open source streamlined mobile experience to access their academic information from the York Region District School Board's TeachAssist portal (ta.yrdsb.ca). View your grades, track performance over time, and get assignment feedback - all in a clean, native mobile interface.
-
 ## Features
 
 ### Current Features
