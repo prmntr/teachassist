@@ -1,29 +1,19 @@
-import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
+﻿import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
-import BackButton from "../(components)/Back";
-import { useTheme } from "../contexts/ThemeContext";
-import { hapticsImpact } from "../(utils)/haptics";
-
-const styles = StyleSheet.create({
-  backgroundVideo: {
-    ...StyleSheet.absoluteFillObject,
-  },
-});
+import { Image, ScrollView, View } from "react-native";
+import Text from "@/components/ui/AppText";
+import BackButton from "@/components/ui/Back";
+import LiquidGlassButton from "@/components/ui/LiquidGlassButton";
+import LiquidGlassView from "@/components/ui/LiquidGlassView";
+import PageBackground from "@/components/ui/PageBackground";
+import { hapticsImpact } from "@/utils/haptics";
+import { useTheme } from "@/contexts/ThemeContext";
 
 const HIGHLIGHTS = [
   {
     title: "Grade tracking",
     body: "View current marks and performance across all your classes.",
-    icon: require("../../assets/images/sparkle.png"),
+    icon: require("../../assets/images/bar-chart.png"),
   },
   {
     title: "Guidance booking",
@@ -33,67 +23,61 @@ const HIGHLIGHTS = [
   {
     title: "Mark alerts",
     body: "Get notified when new marks are posted, updated, or hidden.",
-    icon: require("../../assets/images/lightning.png"),
+    icon: require("../../assets/images/bell.png"),
   },
   {
     title: "No snooping",
-    body: "Your data stays between you, your phone, and TeachAssist. We're also open source.",
+    body: "Your data stays yours, and yours only. Period.",
     icon: require("../../assets/images/privacy.png"),
   },
 ];
 
 const Onboarding = () => {
   const router = useRouter();
-  const { isDark } = useTheme();
-
-  const wordmark = isDark
-    ? require("../../assets/images/teachassist-wordmark.png")
-    : require("../../assets/images/teachassist-wordmark-light.png");
+  const { activeTone, isDark } = useTheme();
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
-      <LinearGradient
-        colors={
-          isDark
-            ? ["rgba(8, 10, 14, 0.2)", "rgba(8, 10, 14, 0.96)"]
-            : ["rgba(248, 250, 252, 0.2)", "rgba(248, 250, 252, 0.96)"]
-        }
-        style={StyleSheet.absoluteFillObject}
-        pointerEvents="none"
-      />
+      <PageBackground />
       <BackButton path={"/"} />
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <View className={`px-6 pt-24 pb-10`}>
-          <View className={`items-center`}>
-            <Image
-              source={wordmark}
-              className={`w-56 h-16 mt-7`}
-              resizeMode="contain"
-            />
-            <Text
-              className={`${isDark ? "text-appwhite" : "text-appblack"} text-2xl font-bold mt-4`}
-            >
-              Welcome to TeachAssist
-            </Text>
-            <Text
-              className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-light text-center mt-0`}
-            >
-              Everything you need to stay on top of marks.
-            </Text>
-          </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: 118, paddingBottom: 40 }}
+      >
+        <View className={`px-6 pb-10`}>
+          <Text
+            className={`text-4xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"}`}
+          >
+            Welcome <Text className="text-baccent font-semibold">aboard!</Text>
+          </Text>
+          <Text
+            className={`mt-1 text-base leading-6 ${isDark ? "text-appgraylight" : "text-appgraydark"}`}
+          >
+            We&apos;re so excited to have you on.
+          </Text>
           <View className={`mt-8`}>
             {HIGHLIGHTS.map((item) => (
-              <View
+              <LiquidGlassView
                 key={item.title}
-                className={`${isDark ? "bg-dark3/75" : "bg-light3/85"} rounded-2xl px-4 py-4 flex-row items-start mb-4`}
+                className="mb-4"
+                contentStyle={{
+                  borderRadius: 12,
+                  paddingHorizontal: 16,
+                  paddingVertical: 16,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
+                fallbackBackgroundColor={activeTone.bg3}
+                glassTintColor={activeTone.bg2}
+                glassEffectStyle="regular"
               >
                 <View
-                  className={`w-12 h-12 rounded-full bg-[#27b1fa]/70 items-center justify-center mr-4 mt-3`}
+                  className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-baccent/70"
                 >
                   <Image
                     source={item.icon}
                     className={`w-7 h-7`}
-                    style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
+                    style={{ tintColor: isDark ? "#edebea" : "#edebea" }}
                   />
                 </View>
                 <View className={`flex-1`}>
@@ -103,38 +87,48 @@ const Onboarding = () => {
                     {item.title}
                   </Text>
                   <Text
-                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm font-light mt-1`}
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm mt-1`}
                   >
                     {item.body}
                   </Text>
                 </View>
-              </View>
+              </LiquidGlassView>
             ))}
           </View>
-          <TouchableOpacity
-            className={`mt-8`}
-            onPress={() => {
-              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-              router.push("/signin");
-            }}
-          >
-            <View
-              className={`bg-baccent/80 px-5 py-3 rounded-xl shadow-lg flex-row items-center justify-center`}
-            >
-              <Text
-                className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
-              >
-                Continue
-              </Text>
-              <Image
-                className={`w-8 h-8`}
-                tintColor={isDark ? "#fafafa" : "#2f3035"}
-                source={require("../../assets/images/arrow-icon.png")}
-              />
-            </View>
-          </TouchableOpacity>
         </View>
       </ScrollView>
+      <View className="px-6 pb-20">
+        <LiquidGlassButton
+          contentStyle={{
+            borderRadius: 12,
+            paddingHorizontal: 20,
+            paddingVertical: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#000",
+            shadowOpacity: isDark ? 0.18 : 0.1,
+            shadowRadius: 10,
+            shadowOffset: {
+              width: 0,
+              height: 4,
+            },
+            elevation: 4,
+          }}
+          glassTintColor={activeTone.accent}
+          fallbackBackgroundColor={activeTone.accent}
+          onPress={() => {
+            hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+            router.push("/Customization");
+          }}
+        >
+          <Text
+            className={`${isDark ? "text-appblack" : "text-appwhite"} font-semibold text-2xl mr-2`}
+          >
+            Continue
+          </Text>
+        </LiquidGlassButton>
+      </View>
     </View>
   );
 };

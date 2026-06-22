@@ -1,22 +1,24 @@
-import * as Haptics from "expo-haptics";
+﻿import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
   Linking,
+  View,
 } from "react-native";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
-import BackButton from "../(components)/Back";
-import { appVersionNumber } from "../(utils)/appVersion";
-import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
-import { runVersionCheck } from "../(utils)/versionCheck";
-import { ensureVpnDisabled } from "../(utils)/vpn";
-import { useTheme } from "../contexts/ThemeContext";
+import Text from "@/components/ui/AppText";
+import AppTextInput from "@/components/ui/AppTextInput";
+import BackButton from "@/components/ui/Back";
+import LiquidGlassButton from "@/components/ui/LiquidGlassButton";
+import LiquidGlassView from "@/components/ui/LiquidGlassView";
+import { appVersionNumber } from "@/utils/appVersion";
+import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
+import { useLiquidGlassActive } from "@/utils/liquidGlass";
+import { runVersionCheck } from "@/utils/versionCheck";
+import { ensureVpnDisabled } from "@/utils/vpn";
+import { useTheme } from "@/contexts/ThemeContext";
 // Sign in screen
 
 const SignInScreen = () => {
@@ -26,7 +28,8 @@ const SignInScreen = () => {
   const [message, setMessage] = useState("");
 
   const router = useRouter();
-  const { isDark } = useTheme();
+  const { isDark, activeTone } = useTheme();
+  const liquidGlassEnabled = useLiquidGlassActive();
 
   // simple client side error checking
   const handleLogin = async () => {
@@ -85,8 +88,32 @@ const SignInScreen = () => {
       className={`flex-1 justify-center items-center ${isDark ? "bg-dark1" : "bg-light1"} px-6`}
     >
       <BackButton path={"/onboarding"} />
-      <TouchableOpacity
-        className={`absolute top-13 right-5 flex flex-row items-center z-50 gap-2 ${isDark ? "bg-dark4" : "bg-light4"} rounded-lg px-2 py-2 shadow-md`}
+      <LiquidGlassButton
+        containerStyle={{
+          position: "absolute",
+          top: 56,
+          right: 20,
+          zIndex: 50,
+        }}
+        contentStyle={{
+          width: liquidGlassEnabled ? 48 : undefined,
+          height: liquidGlassEnabled ? 48 : undefined,
+          borderRadius: liquidGlassEnabled ? 999 : 12,
+          paddingHorizontal: liquidGlassEnabled ? 0 : 9,
+          paddingVertical: liquidGlassEnabled ? 0 : 10,
+          alignItems: "center",
+          justifyContent: "center",
+          shadowColor: "#000",
+          shadowOpacity: isDark ? 0.18 : 0.1,
+          shadowRadius: 8,
+          shadowOffset: {
+            width: 0,
+            height: 4,
+          },
+          elevation: 4,
+        }}
+        glassTintColor={activeTone.bg4}
+        fallbackBackgroundColor={activeTone.bg4}
         onPress={() => {
           hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           Linking.openURL("https://prmntr.com/teachassist#support");
@@ -94,102 +121,124 @@ const SignInScreen = () => {
       >
         <Image
           source={require("../../assets/images/support-help.png")}
-          className="w-8 h-8"
+          className={liquidGlassEnabled ? "w-6 h-6" : "w-7 h-7"}
           style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
         />
-      </TouchableOpacity>
-      <Text
-        className={`text-4xl font-light ${isDark ? "text-appwhite" : "text-appblack"} mb-2 text-center`}
-      >
-        Sign in to <Text className={`text-baccent font-bold`}>TeachAssist</Text>
-      </Text>
-      {/* conditional render */}
-      {message ? (
+      </LiquidGlassButton>
+      <View style={{ width: "100%", maxWidth: 420 }}>
         <Text
-          className={`text-appwhite mb-4 mt-2 text-md text-center bg-danger rounded-lg w-full py-2`}
+          className={`text-4xl leading-[40px] ${isDark ? "text-appwhite" : "text-appblack"} mb-0 text-center`}
         >
-          {message}
+          Alright.
         </Text>
-      ) : (
-        <Text></Text> // displays better with this idk why
-      )}
-
-      <TextInput
-        className={`w-full ${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded-lg px-4 py-4 mb-4`}
-        placeholder="Student ID"
-        placeholderTextColor="#a1a1aa"
-        value={username}
-        onChangeText={setUsername}
-        keyboardType="numeric"
-        editable={!isLoading}
-      />
-      <TextInput
-        className={`w-full ${isDark ? "bg-dark4 text-appwhite" : "bg-light4 text-appblack"} rounded-lg px-4 py-4 mb-4`}
-        placeholder="Password"
-        autoCapitalize="none"
-        autoCorrect={false}
-        placeholderTextColor="#a1a1aa"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        editable={!isLoading}
-      />
-      <Text
-        className={` ${isDark ? "text-appwhite" : "text-appblack"} mx-2 text-center mb-6 text-sm`}
-      >
-        {/* <Text className={`bg-danger`}>DISCLAIMER:</Text> This app is not
-        sponsored, endorsed by, or affiliated with YRDSB or the TeachAssist
-        Foundation. Use at your own risk.*/}
-        By using this app, you agree to the TeachAssist{" \n"}
-        <Link
-          href="https://prmntr.com/teachassist/tos"
-          className={`underline text-baccent`}
-        >
-          Terms of Service
-        </Link>{" "}
-        and{" "}
-        <Link
-          href="https://prmntr.com/teachassist/privacy"
-          className={`underline text-baccent`}
-        >
-          Privacy policy
-        </Link>
-        .
-      </Text>
-      <TouchableOpacity
-        disabled={isLoading}
-        className={`w-full bg-baccent text-center rounded-lg px-4 py-2 mb-3`}
-        onPress={() => {
-          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-          handleLogin();
-        }}
-      >
         <Text
-          className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold text-2xl text-center`}
+          className={`text-4xl leading-[40px] ${isDark ? "text-baccent" : "text-appblack"} mb-7 text-center font-bold`}
         >
-          Sign In
+          Login time.
         </Text>
-      </TouchableOpacity>
-      {/*
-      <TouchableOpacity
-        className={`text-2xl text-center rounded-lg`}
-        onPress={() => {
-          hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-          Alert.alert(
-            "Try these steps",
-            `1. Try disabling your VPN; TeachAssist is only available to YRDSB students with an IP in Canada; we're working on a fix.\n\n2. Check your internet connection.\n\n3. Check the play store for any updates.`
-          );
-        }}
-      >
-        <Text className={`${isDark ? "text-appwhite" : "text-appblack"} text-md text-center underline underline-offset-1`}>
-          Trouble signing in?
-        </Text>
-      </TouchableOpacity>
-      */}
+        {message ? (
+          <LiquidGlassView
+            className="mb-4 mt-2"
+            contentStyle={{
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+            }}
+            glassTintColor="#dc2626"
+            fallbackBackgroundColor="#dc2626"
+            glassEffectStyle="regular"
+          >
+            <Text className="text-appwhite text-md text-center">{message}</Text>
+          </LiquidGlassView>
+        ) : null}
 
-      {isLoading && (
-        <ActivityIndicator size="large" color="#27b1fa" className={`mt-6`} />
-      )}
+        <LiquidGlassView
+          className="mb-4"
+          contentStyle={{ borderRadius: 12 }}
+          fallbackBackgroundColor={activeTone.bg4}
+          glassTintColor={activeTone.bg4}
+        >
+          <AppTextInput
+            className={`px-4 py-4 ${isDark ? "text-appwhite" : "text-appblack"}`}
+            placeholder="Student ID"
+            placeholderTextColor="#a1a1aa"
+            value={username}
+            onChangeText={setUsername}
+            keyboardType="numeric"
+            editable={!isLoading}
+          />
+        </LiquidGlassView>
+        <LiquidGlassView
+          className="mb-4"
+          contentStyle={{ borderRadius: 12 }}
+          fallbackBackgroundColor={activeTone.bg4}
+          glassTintColor={activeTone.bg4}
+        >
+          <AppTextInput
+            className={`px-4 py-4 ${isDark ? "text-appwhite" : "text-appblack"}`}
+            placeholder="Password"
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholderTextColor="#a1a1aa"
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+            editable={!isLoading}
+          />
+        </LiquidGlassView>
+        <Text
+          className={` ${isDark ? "text-appwhite" : "text-appblack"} mx-2 text-center mb-5 text-sm`}
+        >
+          {/* <Text className={`bg-danger/70`}>DISCLAIMER:</Text> This app is not
+          sponsored, endorsed by, or affiliated with YRDSB or the TeachAssist
+          Foundation. Use at your own risk.*/}
+          By using this app, you agree to the TeachAssist{" \n"}
+          <Link
+            href="https://prmntr.com/teachassist/tos"
+            className={`underline text-baccent`}
+          >
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link
+            href="https://prmntr.com/teachassist/privacy"
+            className={`underline text-baccent`}
+          >
+            Privacy Policy
+          </Link>
+          .
+        </Text>
+        <LiquidGlassButton
+          disabled={isLoading}
+          contentStyle={{
+            borderRadius: 12,
+            paddingHorizontal: 16,
+            paddingVertical: 10,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          glassTintColor={activeTone.accent}
+          fallbackBackgroundColor={activeTone.accent}
+          onPress={() => {
+            hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+            handleLogin();
+          }}
+        >
+          <Text
+            className={`${isDark ? "text-appblack" : "text-appwhite"} font-semibold text-2xl text-center`}
+          >
+            {isLoading ? "Signing In..." : "Sign In"}
+          </Text>
+        </LiquidGlassButton>
+
+        {isLoading && (
+          <ActivityIndicator
+            size="large"
+            color={activeTone.accent}
+            className={`mt-6`}
+          />
+        )}
+      </View>
 
       {/*call auth service*/}
       {isLoading && message === "" && (

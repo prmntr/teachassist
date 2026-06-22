@@ -1,8 +1,9 @@
-import * as Haptics from "expo-haptics";
+﻿import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { useTheme } from "../contexts/ThemeContext";
-import { hapticsImpact } from "../(utils)/haptics";
+import { ScrollView, TouchableOpacity, View } from "react-native";
+import Text from "@/components/ui/AppText";
+import { hapticsImpact } from "@/utils/haptics";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // no one should ever see this
 
@@ -124,7 +125,7 @@ const Error = () => {
             problem persists, contact our support.
           </Text>
 
-          <View className={`bg-slate-700/50 rounded-lg p-3`}>
+          <View className={`bg-slate-700/50 rounded-xl p-3`}>
             <View className={`flex-row justify-between items-center`}>
               <Text
                 className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm`}

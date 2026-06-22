@@ -1,44 +1,56 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Alert,
+  AppState,
   Image,
-  Linking,
+  Platform,
   RefreshControl,
   // FlatList,
   ScrollView,
-  Text,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TeachAssistAuthFetcher, { SecureStorage } from "../(auth)/taauth";
-import { parseStudentGrades, type Course } from "../(components)/CourseParser"; // Update import path
-import GradeAverageTracker from "../(components)/GradeAverage";
-import Messages from "../(components)/Messages";
-import { CourseInfoBox } from "../(components)/QuickCourse";
-import { SnowEffect } from "../(components)/SnowEffect";
-import UpdatesModal from "../(components)/UpdatesModal";
-import VersionUpdateModal from "../(components)/VersionUpdateModal";
-import { appVersionLabel, appVersionNumber } from "../(utils)/appVersion";
-import { mergeCoursesWithCache } from "../(utils)/courseCache";
-import { useTheme } from "../contexts/ThemeContext";
-import { hapticsImpact, hapticsNotification } from "../(utils)/haptics";
+import Text from "@/components/ui/AppText";
+import { parseStudentGrades, type Course } from "@/utils/CourseParser"; // Update import path
+import FoolsModal from "@/components/modals/FoolsModal";
+import GradeAverageTracker from "@/components/GradeAverage";
+import LiquidGlassButton from "@/components/ui/LiquidGlassButton";
+import Messages from "@/components/Messages";
+import PageBackground from "@/components/ui/PageBackground";
+import { CourseInfoBox } from "@/components/QuickCourse";
+import { SnowEffect } from "@/components/ui/SnowEffect";
+import UpdatesModal from "@/components/modals/UpdatesModal";
+import VersionUpdateModal from "@/components/modals/VersionUpdateModal";
+import { appVersionLabel, appVersionNumber } from "@/utils/appVersion";
+import { mergeCoursesWithCache } from "@/utils/courseCache";
+import { subscribeCourseStorageUpdates } from "@/utils/courseStorageEvents";
+import { appendGradeHistorySnapshot } from "@/utils/gradeHistory";
+import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
+import { useNativeTabsEnabled } from "@/utils/nativeTabs";
 import {
   loadVersionCheckState,
   markVersionPromptDismissed,
   runVersionCheck,
   shouldShowUpdatePrompt,
   type VersionUpdateMode,
-} from "../(utils)/versionCheck";
+} from "@/utils/versionCheck";
+import { useAFoolVisualGrades } from "@/contexts/AFoolVisualGradesContext";
+import { useTheme } from "@/contexts/ThemeContext";
+
+const TEST_MODAL_YEAR_KEY = "lastSeenFoolsModalYear";
 
 const CoursesScreen = () => {
   const [showUpdates, setShowUpdates] = useState(false);
   const appVersion = appVersionLabel;
+  const { isAFool } = useAFoolVisualGrades();
+  const [showFoolsModal, setShowFoolsModal] = useState(false);
   const [showVersionUpdate, setShowVersionUpdate] = useState(false);
   const [updateMode, setUpdateMode] = useState<VersionUpdateMode>("none");
   const [updateLatest, setUpdateLatest] = useState<string | null>(null);
@@ -62,12 +74,45 @@ const CoursesScreen = () => {
   }, [appVersion]);
 
   useEffect(() => {
+    let isMounted = true;
+
+    const checkAndShowFoolsModal = async () => {
+      if (!isAFool) {
+        if (isMounted) {
+          setShowFoolsModal(false);
+        }
+        return;
+      }
+
+      const currentYear = new Date().getFullYear().toString();
+      try {
+        const lastSeenYear = await AsyncStorage.getItem(TEST_MODAL_YEAR_KEY);
+        if (isMounted) {
+          setShowFoolsModal(lastSeenYear !== currentYear);
+        }
+      } catch {
+        if (isMounted) {
+          setShowFoolsModal(true);
+        }
+      }
+    };
+
+    checkAndShowFoolsModal();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isAFool]);
+
+  useEffect(() => {
     const loadUpdatePrompt = async () => {
       const state = await loadVersionCheckState();
       setUpdateMode(state.mode);
       setUpdateLatest(state.latest);
       setUpdateMinimum(state.minimum);
-      if (shouldShowUpdatePrompt(state.mode, state.latest, state.dismissedFor)) {
+      if (
+        shouldShowUpdatePrompt(state.mode, state.latest, state.dismissedFor)
+      ) {
         setShowVersionUpdate(true);
       }
     };
@@ -78,30 +123,40 @@ const CoursesScreen = () => {
         // Ignore network failures; keep cached state.
       });
   }, []);
-  const { isDark } = useTheme();
+  const { activeTone, isDark } = useTheme();
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const nativeTabsEnabled = useNativeTabsEnabled();
   const isLandscape = width > height;
+  const nativeTabBottomPadding = nativeTabsEnabled
+    ? isLandscape
+      ? 0
+      : insets.bottom + 52
+    : 20;
   const [courses, setCourses] = useState<Course[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("");
-  const [refreshSource, setRefreshSource] = useState<
-    "pull" | "button" | null
-  >(null);
+  const [refreshSource, setRefreshSource] = useState<"pull" | "button" | null>(
+    null,
+  );
   const [hideUnavailableMarks, setHideUnavailableMarks] = useState(false);
   const [tapToRevealMarks, setTapToRevealMarks] = useState(false);
   const [marksLastRetrieved, setMarksLastRetrieved] = useState<string | null>(
     null,
   );
+  const [shouldRunSilentStartupRefresh, setShouldRunSilentStartupRefresh] =
+    useState(false);
   const [shouldRefreshWithLogin, setShouldRefreshWithLogin] = useState(false);
   const [loginCredentials, setLoginCredentials] = useState<{
     username: string;
     password: string;
   } | null>(null);
   const cachedCoursesRef = useRef<Course[] | null>(null);
+  const storedCoursesJsonRef = useRef<string | null>(null);
   const isButtonRefreshing = refreshSource === "button" && isLoading;
   const isPullRefreshing = refreshSource === "pull" && isLoading;
-  const refreshButtonStyle = isButtonRefreshing
-    ? { opacity: 0.6, transform: [{ scale: 0.96 }] }
+  const updatesButtonStyle = isButtonRefreshing
+    ? { opacity: 0.85, transform: [{ scale: 0.98 }] }
     : undefined;
   const renderHeaderOutside = !(isLandscape && courses.length > 0);
   const renderGreetingOutside = !(isLandscape && courses.length > 0);
@@ -116,24 +171,32 @@ const CoursesScreen = () => {
       >
         My Courses
       </Text>
-      <View className="shadow-md">
-        <TouchableOpacity
+      <View className="">
+        <LiquidGlassButton
           onPress={() => {
             hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-            handleRefresh("button");
+            router.push("/GradeUpdates");
           }}
-          className={`${isDark ? "bg-baccent/95" : "bg-baccent"} rounded-lg px-3 py-2`}
-          style={refreshButtonStyle}
-          disabled={isLoading}
+          containerStyle={updatesButtonStyle}
+          contentStyle={{
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          glassTintColor={activeTone.accent}
+          fallbackBackgroundColor={activeTone.accent}
         >
           <Image
-            source={require("../../assets/images/refresh.png")}
+            source={require("../../assets/images/inbox.png")}
             className={`w-7 h-8`}
             style={{
-              tintColor: `${isDark ? "#111113" : "#fafafa"}`,
+              tintColor: `${isDark ? "#111113" : "#fbfbfb"}`,
             }}
           />
-        </TouchableOpacity>
+        </LiquidGlassButton>
       </View>
     </View>
   );
@@ -155,15 +218,41 @@ const CoursesScreen = () => {
 
   const router = useRouter();
 
-  const getUserName = async () => {
-    const userName = await SecureStorage.load("ta_username");
-    return userName;
-  };
+  const getUserName = useCallback(async () => {
+    return await SecureStorage.load("ta_username");
+  }, []);
 
-  const loadLastRetrieved = async () => {
+  const loadLastRetrieved = useCallback(async () => {
     const savedLastRetrieved = await SecureStorage.load("marks_last_retrieved");
     setMarksLastRetrieved(savedLastRetrieved);
-  };
+  }, []);
+
+  const syncCoursesFromStorage = useCallback(async () => {
+    const [savedCoursesJson, savedLastRetrieved] = await Promise.all([
+      SecureStorage.load("ta_courses"),
+      SecureStorage.load("marks_last_retrieved"),
+    ]);
+
+    setMarksLastRetrieved(savedLastRetrieved);
+
+    if (!savedCoursesJson) {
+      storedCoursesJsonRef.current = null;
+      setCourses([]);
+      return;
+    }
+
+    if (savedCoursesJson === storedCoursesJsonRef.current) {
+      return;
+    }
+
+    try {
+      const savedCourses: Course[] = JSON.parse(savedCoursesJson);
+      storedCoursesJsonRef.current = savedCoursesJson;
+      setCourses(Array.isArray(savedCourses) ? savedCourses : []);
+    } catch (error) {
+      console.error("Error syncing saved courses:", error);
+    }
+  }, []);
 
   const mergeAndSaveCourses = async (freshCourses: Course[]) => {
     let cachedCourses: Course[] = [];
@@ -183,80 +272,117 @@ const CoursesScreen = () => {
     const mergedCourses = mergeCoursesWithCache(freshCourses, cachedCourses);
     cachedCoursesRef.current = null;
 
-    await SecureStorage.save("ta_courses", JSON.stringify(mergedCourses));
+    const mergedCoursesJson = JSON.stringify(mergedCourses);
+    await SecureStorage.save("ta_courses", mergedCoursesJson);
+    storedCoursesJsonRef.current = mergedCoursesJson;
     setCourses(mergedCourses);
+    await appendGradeHistorySnapshot(freshCourses, "refresh");
     return mergedCourses;
   };
 
-  const onFetchResult = async (result: string) => {
-    if (result.includes("Login Failed") || result.includes("Session expired")) {
-      // Try automatic re-authentication first
-      const savedUsername = await SecureStorage.load("ta_username");
-      const savedPassword = await SecureStorage.load("ta_password");
+  const onFetchResult = useCallback(
+    async (result: string) => {
+      if (
+        result.includes("Login Failed") ||
+        result.includes("Session expired")
+      ) {
+        // Try automatic re-authentication first
+        const savedUsername = await SecureStorage.load("ta_username");
+        const savedPassword = await SecureStorage.load("ta_password");
 
-      if (savedUsername && savedPassword && !shouldRefreshWithLogin) {
-        console.log(
-          "Session expired, attempting automatic re-authentication...",
-        );
+        if (savedUsername && savedPassword && !shouldRefreshWithLogin) {
+          setMessage("");
+          setLoginCredentials({
+            username: savedUsername,
+            password: savedPassword,
+          });
+          setShouldRefreshWithLogin(true);
+          return; // Don't redirect yet, try reauth first
+        } else {
+          // If already tried reauth or no credentials, redirect to signin
+          setMessage("Please log in again.");
+          setShouldRefreshWithLogin(false);
+          setLoginCredentials(null);
+          router.replace("/signin");
+          setRefreshSource(null);
+        }
+      } else if (result.includes("Login Success")) {
+        // After successful login, reload the data
         setMessage("");
-        setLoginCredentials({
-          username: savedUsername,
-          password: savedPassword,
-        });
-        setShouldRefreshWithLogin(true);
-        return; // Don't redirect yet, try reauth first
-      } else {
-        // If already tried reauth or no credentials, redirect to signin
-        setMessage("Please log in again.");
+        hapticsNotification(Haptics.NotificationFeedbackType.Success);
         setShouldRefreshWithLogin(false);
-        setLoginCredentials(null);
-        router.replace("/signin");
-        setRefreshSource(null);
-      }
-    } else if (result.includes("Login Success")) {
-      // After successful login, reload the data
-      setMessage("");
-      hapticsNotification(Haptics.NotificationFeedbackType.Success);
-      setShouldRefreshWithLogin(false);
-      await loadHtmlOrFetch();
-      const retrievedAt = new Date().toISOString();
-      await SecureStorage.save("marks_last_retrieved", retrievedAt);
-      setMarksLastRetrieved(retrievedAt);
-      setRefreshSource(null);
-    } else {
-      // Parse the HTML using the new parser
-      try {
-        const parsedCoursesJson = parseStudentGrades(result);
-        const parsedCourses: Course[] = JSON.parse(parsedCoursesJson);
-        await mergeAndSaveCourses(parsedCourses);
+        await loadHtmlOrFetch();
         const retrievedAt = new Date().toISOString();
         await SecureStorage.save("marks_last_retrieved", retrievedAt);
         setMarksLastRetrieved(retrievedAt);
-        setMessage("");
-      } catch (error) {
-        console.error("Error parsing courses:", error);
-        setMessage("Error parsing course data. Please try again.");
+        setRefreshSource(null);
+      } else {
+        // Parse the HTML using the new parser
+        try {
+          const parsedCoursesJson = parseStudentGrades(result);
+          const parsedCourses: Course[] = JSON.parse(parsedCoursesJson);
+          await mergeAndSaveCourses(parsedCourses);
+          const retrievedAt = new Date().toISOString();
+          await SecureStorage.save("marks_last_retrieved", retrievedAt);
+          setMarksLastRetrieved(retrievedAt);
+          setMessage("");
+        } catch (error) {
+          console.error("Error parsing courses:", error);
+          setMessage("Error parsing course data. Please try again.");
+        }
+
+        setIsLoading(false);
+        setRefreshSource(null);
       }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [router, shouldRefreshWithLogin],
+  );
 
-      setIsLoading(false);
-      setRefreshSource(null);
-    }
-  };
-
-  const onError = (error: string) => {
+  const onError = useCallback((error: string) => {
     setMessage(`Error: ${error}`);
     setShouldRefreshWithLogin(false);
     setIsLoading(false);
     setRefreshSource(null);
-  };
+  }, []);
 
-  const onLoadingChange = (loading: boolean) => {
+  const onLoadingChange = useCallback((loading: boolean) => {
     setIsLoading(loading);
-  };
+  }, []);
 
-  const loadHtmlOrFetch = async () => {
+  const onSilentStartupRefreshResult = useCallback(
+    async (result: string) => {
+      setShouldRunSilentStartupRefresh(false);
+
+      if (
+        result.includes("Login Failed") ||
+        result.includes("Session expired")
+      ) {
+        return;
+      }
+
+      await syncCoursesFromStorage();
+    },
+    [syncCoursesFromStorage],
+  );
+
+  const onSilentStartupRefreshError = useCallback((_error: string) => {
+    setShouldRunSilentStartupRefresh(false);
+  }, []);
+
+  const onSilentStartupRefreshLoadingChange = useCallback(
+    (_loading: boolean) => {},
+    [],
+  );
+
+  const loadHtmlOrFetch = useCallback(async (
+    options: { scheduleSilentRefresh?: boolean } = {},
+  ) => {
+    const scheduleSilentRefresh = options.scheduleSilentRefresh ?? false;
     setMessage("");
     const savedCoursesJson = await SecureStorage.load("ta_courses");
+    const savedUsername = await SecureStorage.load("ta_username");
+    const savedPassword = await SecureStorage.load("ta_password");
 
     await getUserName();
     await loadLastRetrieved();
@@ -268,13 +394,19 @@ const CoursesScreen = () => {
           ? mergeCoursesWithCache(savedCourses, cachedCoursesRef.current)
           : savedCourses;
         cachedCoursesRef.current = null;
+        const mergedCoursesJson = JSON.stringify(mergedCourses);
         if (mergedCourses !== savedCourses) {
-          await SecureStorage.save("ta_courses", JSON.stringify(mergedCourses));
+          await SecureStorage.save("ta_courses", mergedCoursesJson);
         }
+        storedCoursesJsonRef.current = mergedCoursesJson;
         setCourses(mergedCourses);
+        await appendGradeHistorySnapshot(mergedCourses, "cache");
 
         setMessage("");
         setIsLoading(false);
+        if (scheduleSilentRefresh && savedUsername && savedPassword) {
+          setShouldRunSilentStartupRefresh(true);
+        }
       } catch (error) {
         console.error("Error parsing saved courses:", error);
         setMessage("Error loading saved courses. Fetching fresh data...");
@@ -283,10 +415,12 @@ const CoursesScreen = () => {
     }
 
     if (!savedCoursesJson) {
+      storedCoursesJsonRef.current = null;
       console.warn("Courses not found in storage");
+      setShouldRunSilentStartupRefresh(false);
       setIsLoading(true);
     }
-  };
+  }, [getUserName, loadLastRetrieved]);
 
   const handleRefresh = async (source: "pull" | "button" = "button") => {
     setIsLoading(true);
@@ -294,37 +428,28 @@ const CoursesScreen = () => {
     setMessage("");
 
     const networkState = await NetInfo.fetch();
-    console.log("Connection type", networkState.type);
 
     if (networkState.isConnected === false) {
       setMessage(`No internet connection.\nCheck your network and try again.`);
       setIsLoading(false);
       setRefreshSource(null);
       hapticsNotification(Haptics.NotificationFeedbackType.Error);
-      return; // Exit early if no internet
+      return;
     }
-    // Keep current cache to merge in case TeachAssist hides grades temporarily.
-    cachedCoursesRef.current = courses;
 
-    // Get credentials for re-authentication
     const savedUsername = await SecureStorage.load("ta_username");
     const savedPassword = await SecureStorage.load("ta_password");
 
-    if (savedUsername && savedPassword) {
-      setLoginCredentials({
-        username: savedUsername,
-        password: savedPassword,
-      });
-      setShouldRefreshWithLogin(true);
-      hapticsNotification(Haptics.NotificationFeedbackType.Success);
-    } else {
-      setIsLoading(false);
-      setRefreshSource(null);
-      setShouldRefreshWithLogin(false);
-      setLoginCredentials(null);
+    if (!savedUsername || !savedPassword) {
       router.replace("/signin");
-      Alert.alert("Username and password not found. Please log in again.");
+      return;
     }
+
+    // Keep current cache to merge in case TeachAssist hides grades temporarily.
+    cachedCoursesRef.current = courses;
+    hapticsNotification(Haptics.NotificationFeedbackType.Success);
+    setLoginCredentials({ username: savedUsername, password: savedPassword });
+    setShouldRefreshWithLogin(true);
   };
 
   const hasVisibleGrade = (course: Course) => {
@@ -359,7 +484,7 @@ const CoursesScreen = () => {
   const renderSemesterCourses = (label: string, list: Course[]) => {
     if (list.length === 0) return null;
     return (
-      <View>
+      <View className="mt-2">
         <View
           className={`${
             label === "Semester 1" || label === "School Year" ? "mt-8" : "mt-4"
@@ -376,9 +501,7 @@ const CoursesScreen = () => {
                 </Text>
               </>
             ) : (
-              <Text className={`text-baccent text-2xl font-bold`}>
-                {label}
-              </Text>
+              <Text className={`text-baccent text-2xl font-bold`}>{label}</Text>
             )}
           </Text>
           <Text
@@ -387,6 +510,7 @@ const CoursesScreen = () => {
             {list.length} courses available
           </Text>
         </View>
+        <View className="mb-3"></View>
         {list.map((course) => (
           <View key={`${course.courseCode}-${course.semester}`}>
             {course.hasGrade ? (
@@ -417,11 +541,18 @@ const CoursesScreen = () => {
   };
 
   useEffect(() => {
-    loadHtmlOrFetch();
-  }, []);
+    loadHtmlOrFetch({ scheduleSilentRefresh: true });
+  }, [loadHtmlOrFetch]);
 
   useFocusEffect(
     useCallback(() => {
+      let isActive = true;
+
+      const syncIfActive = async () => {
+        if (!isActive) return;
+        await syncCoursesFromStorage();
+      };
+
       const loadPreferences = async () => {
         const storedHideUnavailable = await AsyncStorage.getItem(
           "hide_unavailable_marks",
@@ -431,14 +562,33 @@ const CoursesScreen = () => {
           "tap_to_reveal_marks",
         );
         setTapToRevealMarks(storedTapToReveal === "true");
+        await syncIfActive();
       };
 
       loadPreferences();
-    }, []),
+      const appStateSubscription = AppState.addEventListener(
+        "change",
+        (nextState) => {
+          if (nextState === "active") {
+            syncIfActive();
+          }
+        },
+      );
+      const unsubscribeCourseStorage = subscribeCourseStorageUpdates(() => {
+        syncIfActive();
+      });
+
+      return () => {
+        isActive = false;
+        appStateSubscription.remove();
+        unsubscribeCourseStorage();
+      };
+    }, [syncCoursesFromStorage]),
   );
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <PageBackground />
       <VersionUpdateModal
         visible={showVersionUpdate}
         mode={updateMode}
@@ -449,8 +599,32 @@ const CoursesScreen = () => {
           await markVersionPromptDismissed(updateLatest);
         }}
       />
+      <FoolsModal
+        visible={
+          showFoolsModal && !showVersionUpdate && updateMode !== "required"
+        }
+        onClose={async () => {
+          setShowFoolsModal(false);
+          try {
+            await AsyncStorage.setItem(
+              TEST_MODAL_YEAR_KEY,
+              new Date().getFullYear().toString(),
+            );
+          } catch (error) {
+            console.warn(
+              "[FoolsModal] Failed to persist dismissed state.",
+              error,
+            );
+          }
+        }}
+      />
       <UpdatesModal
-        visible={showUpdates && !showVersionUpdate && updateMode !== "required"}
+        visible={
+          showUpdates &&
+          !showFoolsModal &&
+          !showVersionUpdate &&
+          updateMode !== "required"
+        }
         onClose={() => setShowUpdates(false)}
         version={appVersion}
       />
@@ -468,9 +642,9 @@ const CoursesScreen = () => {
         <Text
           className={`${
             message.includes("No internet")
-              ? "bg-danger text-appwhite"
+              ? "bg-danger/70 text-appwhite"
               : `bg-baccent/80 ${isDark ? "text-appwhite" : "text-appblack"}`
-          } mt-5 p-2 text-center rounded-lg font-medium mb-5 mx-5 px-5`}
+          } mt-5 p-2 text-center rounded-xl font-medium mb-5 mx-5 px-5`}
         >
           {message}
         </Text> // disent betwn normal and no internet
@@ -484,18 +658,31 @@ const CoursesScreen = () => {
           onLoadingChange={onLoadingChange}
         />
       )}
+      {shouldRunSilentStartupRefresh && !shouldRefreshWithLogin && (
+        <TeachAssistAuthFetcher
+          fetchWithCookies
+          prefetchCourses
+          onResult={onSilentStartupRefreshResult}
+          onError={onSilentStartupRefreshError}
+          onLoadingChange={onSilentStartupRefreshLoadingChange}
+        />
+      )}
 
       {courses.length > 0 && (
         <ScrollView
           showsVerticalScrollIndicator={false}
           className="px-5"
+          contentContainerStyle={{ paddingBottom: nativeTabBottomPadding }}
           refreshControl={
             <RefreshControl
               refreshing={isPullRefreshing}
               onRefresh={() => handleRefresh("pull")}
-              tintColor="#27b1fa"
-              colors={["#27b1fa", "#43a25a", "#fcc245", "#f67c15"]}
-              progressBackgroundColor={`${isDark ? "#27b1fa30" : "#fbfbfb"}`}
+              progressViewOffset={
+                nativeTabsEnabled && Platform.OS === "ios" && (Platform as { isPad: boolean }).isPad ? insets.top + 44 : 0
+              }
+              tintColor={activeTone.accent}
+              colors={[activeTone.accent, "#43a25a", "#fcc245", "#f67c15"]}
+              progressBackgroundColor={activeTone.bg1}
             />
           }
         >
@@ -506,7 +693,7 @@ const CoursesScreen = () => {
             </View>
           )}
           {/* this is literally the only way it works and i have no idea why wtf*/}
-          <View className="shadow-md mt-5">
+          <View className=" mt-5">
             <GradeAverageTracker
               showTrend={true}
               showCourseCount={true}
@@ -540,6 +727,42 @@ const CoursesScreen = () => {
             </Text>
           </TouchableOpacity>
           */}
+          <View className="items-center">
+            <LiquidGlassButton
+              contentStyle={{
+                marginBottom: 33,
+                shadowColor: "#000",
+                shadowOpacity: isDark ? 0.2 : 0.12,
+                shadowRadius: 10,
+                borderRadius: 12,
+                shadowOffset: {
+                  width: 0,
+                  height: 4,
+                },
+                elevation: 4,
+                alignSelf: "flex-start",
+              }}
+              glassTintColor={activeTone.bg2}
+              fallbackBackgroundColor={activeTone.bg4}
+              onPress={() => {
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                router.push("/GradeExport");
+              }}
+            >
+              <View className=" p-4 flex-row items-center justify-center gap-2">
+                <Image
+                  className="w-5 h-5"
+                  style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
+                  source={require("../../assets/images/share.png")}
+                />
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-md`}
+                >
+                  Export Grades
+                </Text>
+              </View>
+            </LiquidGlassButton>
+          </View>
         </ScrollView>
       )}
 

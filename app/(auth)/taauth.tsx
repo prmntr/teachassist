@@ -1,14 +1,23 @@
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { useEffect, useRef } from "react";
-import { parseStudentGrades } from "../(components)/CourseParser";
-import { mergeCoursesWithCache, resolveReportUrl } from "../(utils)/courseCache";
+import { parseStudentGrades } from "@/utils/CourseParser";
+import { parseGradeData } from "@/utils/GradeParser";
+import { mergeCoursesWithCache, resolveReportUrl } from "@/utils/courseCache";
+import { notifyCourseStorageUpdated } from "@/utils/courseStorageEvents";
+import { saveParsedCourseReport } from "@/utils/courseReportCache";
+import {
+  buildTeachAssistLiveUrl,
+  buildTeachAssistStudentsUrl,
+} from "@/utils/serverConfig";
+import { getSchoolDateString } from "@/utils/schoolTime";
 
 // every interaction to the outside world should be passed through here
 
-const INDEX_URL = "https://ta.yrdsb.ca/live/index.php?subject_id=0";
 const DEMO_USERNAME = "123456789";
 const DEMO_PASSWORD = "password";
+
+const getIndexUrl = async () => buildTeachAssistLiveUrl("index.php?subject_id=0");
 
 const isDemoCredentials = (
   username?: string | null,
@@ -23,12 +32,7 @@ const isDemoAccount = async (): Promise<boolean> => {
   return isDemoCredentials(storedUsername, storedPassword);
 };
 
-const formatDateForGuidance = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-};
+const formatDateForGuidance = (date: Date): string => getSchoolDateString(date);
 
 const buildDemoGuidanceHtml = (date: Date): string => {
   const dateString = formatDateForGuidance(date);
@@ -49,11 +53,15 @@ const buildDemoGuidanceHtml = (date: Date): string => {
   <body>
     <h2>Appointment Bookings on ${dateString}</h2>
     <div class="box">
-      <h3>Ms. Demo: Guidance (A-D)</h3>
+      <h3>Xidan Aue: Guidance (6-7)</h3>
       ${buildLinks(demoSlotsA, 1000)}
     </div>
     <div class="box">
-      <h3>Mr. Sample: Guidance (E-Z)</h3>
+      <h3>E. Tran: Guidance (4-1)</h3>
+      ${buildLinks(demoSlotsB, 2000)}
+    </div>
+     <div class="box">
+      <h3>K. Cwan: Guidance (say-wallahi)</h3>
       ${buildLinks(demoSlotsB, 2000)}
     </div>
   </body>
@@ -63,17 +71,14 @@ const buildDemoGuidanceHtml = (date: Date): string => {
 // wrapper for expo-secure-store
 export class SecureStorage {
   static async save(key: string, value: string) {
-    console.log(`SecureStorage: Saving ${key}...`);
     await SecureStore.setItemAsync(key, value);
   }
 
   static async load(key: string) {
-    console.log(`SecureStorage: Loading ${key}...`);
     return await SecureStore.getItemAsync(key);
   }
 
   static async delete(key: string) {
-    console.log(`SecureStorage: Deleting ${key}...`);
     await SecureStore.deleteItemAsync(key);
   }
 }
@@ -199,6 +204,21 @@ const extractSessionTokenFromHtml = (html: string): string | null => {
   return inputMatch?.[1] ?? null;
 };
 
+const syncStoredSessionFromHtml = async (html: string) => {
+  const studentId = extractStudentIdFromHtml(html);
+  const sessionToken = extractSessionTokenFromHtml(html);
+
+  if (studentId) {
+    await SecureStorage.save("ta_student_id", studentId);
+  }
+
+  if (sessionToken) {
+    await SecureStorage.save("ta_session_token", sessionToken);
+  }
+
+  return { studentId, sessionToken };
+};
+
 const buildCookieHeader = async (): Promise<string | null> => {
   const storedCookies = await SecureStorage.load("ta_cookies");
   if (storedCookies && storedCookies.length > 0) {
@@ -272,41 +292,15 @@ const syncCookiesFromResponse = async (response: Response) => {
   }
 };
 
-const syncStoredSessionFromCookies = async () => {
-  const cookies = parseCookieHeader(await SecureStorage.load("ta_cookies"));
-  const studentId = cookies.student_id ?? null;
-  const sessionToken = cookies.session_token ?? null;
-
-  if (studentId) {
-    await SecureStorage.save("ta_student_id", studentId);
-  }
-
-  if (sessionToken) {
-    await SecureStorage.save("ta_session_token", sessionToken);
-  }
-
-  return { studentId, sessionToken };
-};
-
 const fetchHtmlWithCookies = async (
   url: string,
   init: RequestInit = {},
-  logCookieContext?: string
 ): Promise<{ html: string; response: Response }> => {
   const cookieHeader = await buildCookieHeader();
   const headers = new Headers(init.headers ?? {});
 
   if (cookieHeader) {
     headers.set("Cookie", cookieHeader);
-  }
-
-  if (logCookieContext) {
-    const effectiveCookie = headers.get("Cookie");
-    console.log(
-      `taauth: ${logCookieContext} cookie header: ${
-        effectiveCookie ?? "<none>"
-      }`
-    );
   }
 
   if (!headers.has("Accept")) {
@@ -337,15 +331,26 @@ const buildCourseReportUrl = async (
   const savedStudentId = await SecureStorage.load("ta_student_id");
   const savedSchoolId = await SecureStorage.load("school_id");
   if (!savedStudentId || !savedSchoolId) return null;
-  return `https://ta.yrdsb.ca/live/students/viewReport.php?subject_id=${subjectId}&student_id=${savedStudentId}&school_id=${savedSchoolId}`;
+  return buildTeachAssistStudentsUrl(
+    `viewReport.php?subject_id=${subjectId}&student_id=${savedStudentId}&school_id=${savedSchoolId}`,
+  );
 };
 
-const isCourseReportHtml = (html: string): boolean => {
-  return (
-    html.includes("Assignment</th>") ||
-    html.includes("Course Weighting") ||
-    html.includes("Student Achievement")
-  );
+const saveMarksLastRetrievedNow = async (_source: string) => {
+  const timestamp = new Date().toISOString();
+  await SecureStorage.save("marks_last_retrieved", timestamp);
+  notifyCourseStorageUpdated();
+};
+
+const saveLastAuthTime = async () => {
+  await SecureStorage.save("ta_last_auth_time", Date.now().toString());
+};
+
+const isAuthLikelyExpired = async (thresholdMs = 15 * 60 * 1000): Promise<boolean> => {
+  const lastAuthTime = await SecureStorage.load("ta_last_auth_time");
+  if (!lastAuthTime) return true;
+  const elapsed = Date.now() - parseInt(lastAuthTime, 10);
+  return Number.isFinite(elapsed) && elapsed > thresholdMs;
 };
 
 const prefetchCourseReports = async (coursesJson: string): Promise<boolean> => {
@@ -358,8 +363,12 @@ const prefetchCourseReports = async (coursesJson: string): Promise<boolean> => {
 
   const urls: string[] = [];
   for (const course of parsed) {
+    // Skip stale courses — they are hidden by the teacher and their report URLs
+    // may return the school homepage, which would overwrite valid cached data.
+    if (course?.isGradeStale) continue;
+
     const reportUrl = course?.reportUrl
-      ? resolveReportUrl(String(course.reportUrl).replace(/&amp;/g, "&"))
+      ? await resolveReportUrl(String(course.reportUrl).replace(/&amp;/g, "&"))
       : null;
 
     if (reportUrl) {
@@ -382,8 +391,11 @@ const prefetchCourseReports = async (coursesJson: string): Promise<boolean> => {
       return false;
     }
     const subjectId = getSubjectIdFromUrl(url);
-    if (subjectId && isCourseReportHtml(html)) {
-      await SecureStorage.save(`course_${subjectId}`, html);
+    if (subjectId) {
+      const parsed = parseGradeData(html);
+      if (parsed.success) {
+        await saveParsedCourseReport(subjectId, parsed);
+      }
     }
   }
 
@@ -448,7 +460,6 @@ const saveAppointmentData = async (
     appointments.push(newAppointment);
 
     await SecureStorage.save("ta_appointments", JSON.stringify(appointments));
-    console.log("taauth: Appointment data saved successfully");
     await refreshGuidanceReminders();
   } catch (error) {
     console.error("taauth: Error saving appointment data:", error);
@@ -466,7 +477,6 @@ const removeAppointmentData = async (appointmentId: string) => {
       );
       appointments = appointments.filter((apt) => apt.id !== appointmentId);
       await SecureStorage.save("ta_appointments", JSON.stringify(appointments));
-      console.log("taauth: Appointment removed successfully");
       await refreshGuidanceReminders();
     }
   } catch (error) {
@@ -487,8 +497,9 @@ const extractAppointmentFromUrl = (url: string) => {
 
 const fetchSchoolName = async (schoolId: string) => {
   try {
-    console.log(`taauth: Fetching school name for school ID ${schoolId}`);
-    const calendarUrl = `https://ta.yrdsb.ca/live/students/calendar_full.php?school_id=${schoolId}`;
+    const calendarUrl = await buildTeachAssistStudentsUrl(
+      `calendar_full.php?school_id=${schoolId}`,
+    );
 
     const response = await fetch(calendarUrl); // no cookies needed
 
@@ -502,7 +513,6 @@ const fetchSchoolName = async (schoolId: string) => {
         const schoolName = fullH1Text
           .replace(/\s+School Full Calendar$/i, "")
           .trim();
-        console.log(`taauth: school name is ${schoolName}`);
         await SecureStorage.save("school_name", schoolName);
         return schoolName;
       } else {
@@ -560,10 +570,26 @@ const refreshGuidanceReminders = async () => {
   if (Constants.appOwnership === "expo") return;
   try {
     const { scheduleGuidanceReminders } =
-      await import("../(utils)/notifications");
+      await import("@/utils/notifications");
     await scheduleGuidanceReminders();
   } catch (error) {
     console.warn("taauth: Failed to refresh guidance reminders", error);
+  }
+};
+
+const syncStoredStudentGrade = async (coursesJson: string) => {
+  try {
+    const {
+      scheduleStudentGradeNotification,
+      syncStoredStudentGrade: persistStudentGrade,
+    } = await import("@/utils/notifications");
+    const grade = await persistStudentGrade(coursesJson);
+
+    if (Constants.appOwnership !== "expo") {
+      await scheduleStudentGradeNotification(grade);
+    }
+  } catch (error) {
+    console.warn("taauth: Failed to sync stored student grade", error);
   }
 };
 
@@ -625,30 +651,27 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         await SecureStorage.save("ta_is_demo", "true");
         await SecureStorage.save("ta_student_id", "");
         await SecureStorage.save("ta_session_token", "");
-        await SecureStorage.save(
-          "ta_courses",
-          `[
+        const demoCoursesJson = `[
   {
-    "courseCode": "ENG2D1",
-    "courseName": "English",
+    "courseCode": "AMI1O1",
+    "courseName": "Instrumental Music - Band",
     "block": "1",
     "room": "41",
     "startDate": "2025-09-02",
-    "semester": 1,
+    "semester": 2,
     "endDate": "2026-01-29",
-    "grade": "96",
-    "midtermMark": "94",
+    "grade": "89.6",
     "hasGrade": true
   },
   {
-    "courseCode": "CHC2D1",
-    "courseName": "Canadian History Since WW2",
+    "courseCode": "CGC1D1",
+    "courseName": "Issues In Canadian Geography",
     "block": "2",
-    "room": "76",
+    "room": "167",
     "startDate": "2025-09-02",
-    "semester": 1,
+    "semester": 2,
     "endDate": "2026-01-29",
-    "grade": "97",
+    "grade": "92.1",
     "hasGrade": true
 
   },
@@ -658,19 +681,19 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     "block": "3",
     "room": "CAFE",
     "startDate": "2025-09-02",
-    "semester": 1,
+    "semester": 2,
     "endDate": "2026-01-29",
     "hasGrade": false
   },
   {
-    "courseCode": "ICD2O1",
+    "courseCode": "ICD2fO1",
     "courseName": "Digital Technology",
     "block": "4",
     "room": "114",
     "startDate": "2025-09-02",
-    "semester": 1,
+    "semester": 2,
     "endDate": "2026-01-29",
-    "grade": "93",
+    "grade": "80",
     "hasGrade": true
   },
   {
@@ -679,20 +702,22 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     "block": "5",
     "room": "137",
     "startDate": "2025-09-02",
-    "semester": 1,
+    "semester": 2,
     "endDate": "2026-01-29",
     "grade": "92",
     "hasGrade": true
   }
 ]
-`
-        );
+        `;
+        await SecureStorage.save("ta_courses", demoCoursesJson);
+        await syncStoredStudentGrade(demoCoursesJson);
+        await saveMarksLastRetrievedNow("loginAndStore demo account");
         await SecureStorage.save("school_id", "0");
         await SecureStorage.save("school_name", "Example School");
         return { success: true };
       }
 
-      const loginUrl = `${INDEX_URL}&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
+      const loginUrl = `${await getIndexUrl()}&username=${encodedUsername}&password=${encodedPassword}&submit=Login`;
       const { html } = await fetchHtmlWithCookies(loginUrl);
 
       if (html.toLowerCase().includes("log in")) {
@@ -728,18 +753,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       }
       const schoolId = html.match(/school_id=(\d+)/)?.[1] ?? null;
 
-      const cookieSession = await syncStoredSessionFromCookies();
-      const studentId =
-        cookieSession.studentId ?? extractStudentIdFromHtml(html);
-      const sessionToken =
-        cookieSession.sessionToken ?? extractSessionTokenFromHtml(html);
-
-      if (studentId && studentId !== cookieSession.studentId) {
-        await SecureStorage.save("ta_student_id", studentId);
-      }
-      if (sessionToken && sessionToken !== cookieSession.sessionToken) {
-        await SecureStorage.save("ta_session_token", sessionToken);
-      }
+      await syncStoredSessionFromHtml(html);
 
       if (!schoolId) {
         return {
@@ -748,22 +762,19 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         };
       }
 
-      if (!sessionToken) {
-        console.warn(
-          "taauth: Login succeeded but session cookies were unreadable; continuing with best-effort session state."
-        );
-      }
-
       await SecureStorage.save("ta_username", username);
       await SecureStorage.save("ta_password", password);
       await SecureStorage.save("ta_is_demo", "false");
       await SecureStorage.save("ta_courses", mergedCoursesJson);
+      await syncStoredStudentGrade(mergedCoursesJson);
       await SecureStorage.save("school_id", schoolId);
       await fetchSchoolName(schoolId);
 
       if (shouldPrefetch) {
         await prefetchCourseReports(mergedCoursesJson);
       }
+      await saveMarksLastRetrievedNow("loginAndStore standard account");
+      await saveLastAuthTime();
 
       return { success: true };
     };
@@ -771,9 +782,8 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
     const fetchHtmlWithAutoReauth = async (
       url: string,
       init?: RequestInit,
-      logCookieContext?: string
     ): Promise<{ html: string; reauthed: boolean }> => {
-      const first = await fetchHtmlWithCookies(url, init, logCookieContext);
+      const first = await fetchHtmlWithCookies(url, init);
       if (!first.html.toLowerCase().includes("log in")) {
         return { html: first.html, reauthed: false };
       }
@@ -794,11 +804,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         return { html: first.html, reauthed: false };
       }
 
-      const retry = await fetchHtmlWithCookies(
-        url,
-        init,
-        logCookieContext ? `${logCookieContext} (retry)` : undefined
-      );
+      const retry = await fetchHtmlWithCookies(url, init);
       return { html: retry.html, reauthed: true };
     };
 
@@ -819,7 +825,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
 
       try {
         if (loginParams) {
-          console.log("taauth: starting login");
           const result = await loginAndStore(
             loginParams.username,
             loginParams.password,
@@ -835,22 +840,17 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         }
 
         if (fetchCourseUrl) {
-          console.log(
-            `taauth: Fetching specific course URL: ${fetchCourseUrl}`
-          );
           const { html } = await fetchHtmlWithAutoReauth(fetchCourseUrl);
           if (html.toLowerCase().includes("log in")) {
             safeOnResult("Login Failed: Session expired or invalid cookies.");
           } else {
-            console.log("taauth: Course HTML fetched successfully from URL");
             safeOnResult(html);
           }
           return;
         }
 
         if (fetchWithCookies) {
-          console.log("taauth: Fetching main courses page with cookies");
-          const { html } = await fetchHtmlWithAutoReauth(INDEX_URL);
+          const { html } = await fetchHtmlWithAutoReauth(await getIndexUrl());
 
           if (html.toLowerCase().includes("log in")) {
             safeOnResult("Login Failed: Session expired or invalid cookies.");
@@ -881,6 +881,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
               }
 
               await SecureStorage.save("ta_courses", mergedCoursesJson);
+              await syncStoredStudentGrade(mergedCoursesJson);
 
               const schoolIdFromHtml = html.match(/school_id=(\d+)/)?.[1];
               if (schoolIdFromHtml) {
@@ -888,13 +889,14 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
               }
 
               await prefetchCourseReports(mergedCoursesJson);
+              await saveMarksLastRetrievedNow("fetchWithCookies prefetch");
+              await saveLastAuthTime();
             } catch {
               // fall through and just return the HTML
             }
           }
 
           safeOnResult(html);
-          console.log("taauth: html fetched successfully with cookies");
           return;
         }
 
@@ -905,13 +907,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           }
           const savedStudentId = await SecureStorage.load("ta_student_id");
           const savedSchoolId = await SecureStorage.load("school_id");
-          const storedCookieHeader = await SecureStorage.load("ta_cookies");
-          const storedSessionToken = await SecureStorage.load("ta_session_token");
-          console.log(
-            `taauth: guidance cookie debug - ta_cookies: ${
-              storedCookieHeader ?? "<missing>"
-            }, ta_session_token: ${storedSessionToken ?? "<missing>"}`
-          );
 
           if (!savedStudentId || !savedSchoolId) {
             safeOnResult(
@@ -920,15 +915,24 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             return;
           }
 
-          const guidanceDate = formatDateForGuidance(getGuidance);
-          console.log(`taauth: Fetching guidance for date ${guidanceDate}`);
-          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`;
+          // Proactively re-auth before hitting the guidance URL when the session
+          // is likely expired. The TA portal is known to hang for a long time on
+          // expired-session requests before eventually redirecting to login, so
+          // re-logging in upfront avoids that wait entirely.
+          if (await isAuthLikelyExpired()) {
+            const savedUsername = await SecureStorage.load("ta_username");
+            const savedPassword = await SecureStorage.load("ta_password");
+            if (savedUsername && savedPassword) {
+              await loginAndStore(savedUsername, savedPassword, false);
+            }
+          }
 
-          const { html } = await fetchHtmlWithAutoReauth(
-            url,
-            undefined,
-            "guidance request"
+          const guidanceDate = formatDateForGuidance(getGuidance);
+          const url = await buildTeachAssistStudentsUrl(
+            `bookAppointment.php?school_id=${savedSchoolId}&student_id=${savedStudentId}&inputDate=${guidanceDate}`,
           );
+
+          const { html } = await fetchHtmlWithAutoReauth(url);
           if (html.toLowerCase().includes("log in")) {
             safeOnResult(
               "Retrieval failed: Session expired or invalid cookies."
@@ -937,7 +941,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             safeOnResult("NOT A SCHOOL DAY");
           } else {
             safeOnResult(html);
-            console.log("taauth: guidance html fetched successfully");
           }
           return;
         }
@@ -956,7 +959,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             safeOnResult("Appointment booked successfully!");
             return;
           }
-          console.log("taauth: Processing appointment booking response");
           const cleanedUrl = decodeHtmlEntities(bookAppointment);
           const { html } = await fetchHtmlWithAutoReauth(cleanedUrl);
 
@@ -966,7 +968,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           }
 
           if (html.toLowerCase().includes("cancel")) {
-            console.log("taauth: appointment booking successful");
             const appointmentDetails = extractAppointmentFromUrl(cleanedUrl);
             const savedSchoolId = await SecureStorage.load("school_id");
 
@@ -983,14 +984,10 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           }
 
           if (isAppointmentForm(html)) {
-            console.log("taauth: appointment form detected, needs user input");
             safeOnResult(html);
             return;
           }
 
-          console.log(
-            "taauth: appointment booking failed - unexpected response"
-          );
           safeOnResult("Failed to book appointment. Please try again.");
           return;
         }
@@ -1003,9 +1000,10 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             safeOnResult("Appointment cancelled successfully!");
             return;
           }
-          console.log("taauth: Processing appointment cancellation response");
           const { date, time, id, schoolId } = cancelAppointment;
-          const url = `https://ta.yrdsb.ca/live/students/bookAppointment.php?dt=${date}&tm=${time}&id=${id}&school_id=${schoolId}&action=cancel`;
+          const url = await buildTeachAssistStudentsUrl(
+            `bookAppointment.php?dt=${date}&tm=${time}&id=${id}&school_id=${schoolId}&action=cancel`,
+          );
 
           const { html } = await fetchHtmlWithAutoReauth(url);
 
@@ -1020,7 +1018,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             html.toLowerCase().includes("cancelled") ||
             html.toLowerCase().includes("canceled")
           ) {
-            console.log("taauth: appointment cancelled successfully");
             if (id) {
               await removeAppointmentData(id);
             }
@@ -1060,10 +1057,9 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             safeOnResult("Appointment booked successfully!");
             return;
           }
-          console.log("taauth: Processing form submission response");
           const formDataString = createFormDataString(submitAppointmentForm);
           const { html } = await fetchHtmlWithAutoReauth(
-            "https://ta.yrdsb.ca/live/students/bookAppointment.php",
+            await buildTeachAssistStudentsUrl("bookAppointment.php"),
             {
               method: "POST",
               headers: {
@@ -1084,8 +1080,6 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             html.toLowerCase().includes("cancel") ||
             html.toLowerCase().includes("booked")
           ) {
-            console.log("taauth: appointment form submitted successfully");
-
             if (submitAppointmentForm.hiddenFields) {
               const appointmentDetails = {
                 date:
@@ -1114,14 +1108,12 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
             html.toLowerCase().includes("error") ||
             html.toLowerCase().includes("failed")
           ) {
-            console.log("taauth: form submission failed");
             safeOnResult(
               "Failed to submit appointment form. Please try again."
             );
             return;
           }
 
-          console.log("taauth: form submission completed");
           safeOnResult("Appointment request submitted successfully!");
           return;
         }

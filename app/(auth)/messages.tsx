@@ -1,9 +1,11 @@
-import * as Haptics from "expo-haptics";
+﻿import * as Haptics from "expo-haptics";
 import { Link, useRouter } from "expo-router";
-import { Image, Text, TouchableOpacity, View } from "react-native";
-import BackButton from "../(components)/Back";
-import { useTheme } from "../contexts/ThemeContext";
-import { hapticsImpact } from "../(utils)/haptics";
+import { Image, TouchableOpacity, View } from "react-native";
+import Text from "@/components/ui/AppText";
+import BackButton from "@/components/ui/Back";
+import PageBackground from "@/components/ui/PageBackground";
+import { hapticsImpact } from "@/utils/haptics";
+import { useTheme } from "@/contexts/ThemeContext";
 
 // Some messages to show the user, no meaningful impact
 
@@ -13,6 +15,7 @@ const Onboarding = () => {
 
   return (
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
+      <PageBackground />
       <BackButton path={"/"} />
       <View className={`flex-1 items-center justify-center mr-3`}>
         <Text
@@ -63,10 +66,10 @@ const Onboarding = () => {
           }}
         >
           <View
-            className={`bg-baccent/85 px-5 py-3 rounded-xl shadow-lg flex-row items-center mt-5`}
+            className={`bg-baccent/85 px-5 py-3 rounded-xl  flex-row items-center mt-5`}
           >
             <Text
-              className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-3xl mr-2`}
+              className={`${isDark ? "text-appblack" : "text-appwhite"} font-semibold text-3xl mr-2`}
             >
               Got it
             </Text>
