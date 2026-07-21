@@ -148,7 +148,7 @@ const ExamCalc = () => {
               maxLength={5}
             />
             <Text className={`mt-2 ${helperClassName}`}>
-              Ex: 20 means your exam is worth 20% of the final grade
+              Ex: 20 means your exam is worth 20% of your final grade.
             </Text>
           </View>
 

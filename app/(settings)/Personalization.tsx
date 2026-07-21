@@ -1,20 +1,10 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Text as RNText,
-  ScrollView,
-  TouchableOpacity,
-  useColorScheme,
-  View,
-} from "react-native";
-import { SecureStorage } from "../(auth)/taauth";
+﻿import { AlertIcon, AppAlert } from "@/components/ui/AppAlert";
+import Text from "@/components/ui/AppText";
+import AppToggle from "@/components/ui/AppToggle";
+import BackButton from "@/components/ui/Back";
+import LiquidGlassView from "@/components/ui/LiquidGlassView";
+import PageBackground from "@/components/ui/PageBackground";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
   getHapticsEnabled,
   hapticsImpact,
@@ -27,12 +17,22 @@ import {
   CUSTOM_THEME_IMAGE_STORAGE_KEY,
   FONT_PRESETS,
 } from "@/utils/themeSystem";
-import { useTheme } from "@/contexts/ThemeContext";
-import Text from "@/components/ui/AppText";
-import AppToggle from "@/components/ui/AppToggle";
-import BackButton from "@/components/ui/Back";
-import LiquidGlassView from "@/components/ui/LiquidGlassView";
-import PageBackground from "@/components/ui/PageBackground";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Text as RNText,
+  ScrollView,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from "react-native";
+import { SecureStorage } from "../(auth)/taauth";
 
 const PersonalizationScreen = () => {
   const {
@@ -60,6 +60,7 @@ const PersonalizationScreen = () => {
   const [messageMode, setMessageMode] = useState<
     "default" | "inspirational" | "off"
   >("default");
+  const [showRefreshButton, setShowRefreshButton] = useState(false);
   const [hapticsEnabled, setHapticsEnabled] = useState(true);
   const [showCustomThemeModal, setShowCustomThemeModal] = useState(false);
   const systemColorScheme = useColorScheme();
@@ -70,13 +71,16 @@ const PersonalizationScreen = () => {
 
   useEffect(() => {
     const loadPersonalizationState = async () => {
-      const [, storedMessageMode, storedHaptics] = await Promise.all([
-        SecureStorage.load(CUSTOM_THEME_IMAGE_STORAGE_KEY),
-        AsyncStorage.getItem("messages_mode"),
-        getHapticsEnabled(),
-      ]);
+      const [, storedMessageMode, storedHaptics, storedRefreshButton] =
+        await Promise.all([
+          SecureStorage.load(CUSTOM_THEME_IMAGE_STORAGE_KEY),
+          AsyncStorage.getItem("messages_mode"),
+          getHapticsEnabled(),
+          AsyncStorage.getItem("show_refresh_button"),
+        ]);
 
       setHapticsEnabled(storedHaptics);
+      setShowRefreshButton(storedRefreshButton === "true");
       if (
         storedMessageMode === "default" ||
         storedMessageMode === "inspirational" ||
@@ -127,9 +131,10 @@ const PersonalizationScreen = () => {
       hapticsNotification(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.warn("theme generation failed", error);
-      Alert.alert(
+      AppAlert.alert(
         "Theme Generation Failed",
         "Try a different image with stronger contrast and color.",
+        { icon: AlertIcon.error },
       );
     } finally {
       setIsBuildingCustomTheme(false);
@@ -156,6 +161,12 @@ const PersonalizationScreen = () => {
     if (value) {
       await hapticsImpact(Haptics.ImpactFeedbackStyle.Light);
     }
+  };
+
+  const toggleRefreshButton = async (value: boolean) => {
+    await hapticsImpact(Haptics.ImpactFeedbackStyle.Light);
+    setShowRefreshButton(value);
+    await AsyncStorage.setItem("show_refresh_button", value ? "true" : "false");
   };
 
   const openCustomThemeModal = async () => {
@@ -211,12 +222,12 @@ const PersonalizationScreen = () => {
                   {
                     key: "dark",
                     label: "Dark",
-                    icon: require("../../../assets/images/moon-fill.webp"),
+                    icon: require("../../assets/images/moon.png"),
                   },
                   {
                     key: "light",
                     label: "Light",
-                    icon: require("../../../assets/images/sun-fill.webp"),
+                    icon: require("../../assets/images/sun-fill.webp"),
                   },
                 ].map((option) => {
                   const isSelected = theme === option.key;
@@ -238,8 +249,10 @@ const PersonalizationScreen = () => {
                       <View className="flex-row items-center justify-center">
                         <Image
                           source={option.icon}
-                          className="w-4 h-4 mr-2"
+                          className="mr-2"
                           style={{
+                            width: 16,
+                            height: 17,
                             tintColor: isSelected
                               ? isDark
                                 ? "#2f3035"
@@ -322,7 +335,8 @@ const PersonalizationScreen = () => {
                       <View className="flex-row items-center">
                         {[preset.light.accent, preset.dark.accent].map(
                           (color, idx) =>
-                            isSelected && idx === 1 ? null : (
+                            isSelected &&
+                            (isDark ? idx === 1 : idx === 0) ? null : (
                               <View
                                 key={`${preset.id}-${color}-${idx}`}
                                 className={`mr-1.5 h-2.5 rounded-full ${
@@ -367,7 +381,7 @@ const PersonalizationScreen = () => {
                           ? activeTone.bg1
                           : activeTone.accent,
                       }}
-                      source={require("../../../assets/images/paintbrush.png")}
+                      source={require("../../assets/images/paintbrush.png")}
                     />
                     <Text
                       className={`text-sm font-semibold ${
@@ -547,6 +561,33 @@ const PersonalizationScreen = () => {
               </View>
             </View>
 
+            <View
+              className={`${isDark ? "bg-dark4" : "bg-light4"} h-px mx-4`}
+            />
+
+            <View className="px-4 py-4 flex-row justify-between items-center">
+              <View className="flex-1 pr-3">
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-semibold`}
+                >
+                  Refresh Button
+                </Text>
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm mt-1`}
+                >
+                  Show a refresh button on the Courses screen.
+                </Text>
+              </View>
+              <AppToggle
+                value={showRefreshButton}
+                onValueChange={toggleRefreshButton}
+              />
+            </View>
+
+            <View
+              className={`${isDark ? "bg-dark4" : "bg-light4"} h-px mx-4`}
+            />
+
             <View className="px-4 py-4 flex-row justify-between items-center">
               <View className="flex-1 pr-3">
                 <Text
@@ -560,10 +601,7 @@ const PersonalizationScreen = () => {
                   Turn vibration feedback on or off.
                 </Text>
               </View>
-              <AppToggle
-                value={hapticsEnabled}
-                onValueChange={toggleHaptics}
-              />
+              <AppToggle value={hapticsEnabled} onValueChange={toggleHaptics} />
             </View>
           </LiquidGlassView>
         </View>
@@ -589,7 +627,7 @@ const PersonalizationScreen = () => {
                 <Text
                   className={`${isDark ? "text-appwhite" : "text-appblack"}/60 mt-4`}
                 >
-                  Enable Liquid Glass
+                  Use Liquid Glass
                 </Text>
                 {showLiquidGlassAppearanceWarning ? (
                   <Text
@@ -609,7 +647,8 @@ const PersonalizationScreen = () => {
       <Modal visible={showCustomThemeModal} transparent animationType="fade">
         <View className="flex-1 bg-black/60 items-center justify-center px-5">
           <LiquidGlassView
-            className="w-full rounded-2xl p-5"
+            containerClassName="w-full max-w-md"
+            className="rounded-2xl p-6"
             fallbackBackgroundColor={activeTone.bg3}
             glassTintColor={activeTone.bg2}
             glassEffectStyle="regular"
@@ -640,9 +679,9 @@ const PersonalizationScreen = () => {
                   <Image
                     className={`w-5 h-5`}
                     style={{
-                      tintColor: isDark ? "#edebea" : "#2f3035",
+                      tintColor: isDark ? "#2f3035" : "#edebea",
                     }}
-                    source={require("../../../assets/images/checkmark.png")}
+                    source={require("../../assets/images/checkmark.png")}
                   />
                 </View>
               </TouchableOpacity>

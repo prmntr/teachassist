@@ -1,7 +1,7 @@
-﻿import * as Haptics from "expo-haptics";
-import { useEffect, useState } from "react";
+﻿import { useFocusEffect } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
+import { useCallback, useState } from "react";
 import {
-  Alert,
   FlatList,
   Image,
   Linking,
@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import TeachAssistAuthFetcher, {
   AppointmentData,
   SecureStorage,
@@ -23,6 +24,7 @@ import {
 } from "@/utils/schoolTime";
 import { buildTeachAssistUrl } from "@/utils/serverConfig";
 import { useLiquidGlassActive } from "@/utils/liquidGlass";
+import { DEFAULT_STATUS_COLORS } from "@/utils/themeSystem";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/AppText";
 import BackButton from "@/components/ui/Back";
@@ -48,15 +50,35 @@ const AppointmentsPage = () => {
     {},
   );
 
-  // Load appointments
-  const loadAppointments = async () => {
+  // Load appointments. Re-reads from storage every time — this is also
+  // what powers pull-to-refresh, since there's no server-side "list my
+  // appointments" endpoint to sync against; refreshing means re-deriving
+  // the current view from local storage, not a no-op.
+  const loadAppointments = useCallback(async () => {
     try {
       const appointmentsJson = await SecureStorage.load("ta_appointments");
       if (appointmentsJson) {
         const parsedAppointments: AppointmentData[] =
           JSON.parse(appointmentsJson);
+
+        // Older bookings could collide on id (a since-fixed bug in demo
+        // appointment generation), which made entries randomly vanish from
+        // this FlatList since React drops duplicate keys. Self-heal any
+        // stored data still carrying that: keep the most recent write per id.
+        const dedupedAppointments = Array.from(
+          new Map(
+            parsedAppointments.map((apt) => [apt.id, apt] as const),
+          ).values(),
+        );
+        if (dedupedAppointments.length !== parsedAppointments.length) {
+          await SecureStorage.save(
+            "ta_appointments",
+            JSON.stringify(dedupedAppointments),
+          );
+        }
+
         // Filter out past appointments and sort by date/time
-        const futureAppointments = parsedAppointments
+        const futureAppointments = dedupedAppointments
           .filter((apt) => {
             const appointmentDateTime = parseSchoolDateTime(apt.date, apt.time);
             return appointmentDateTime > new Date();
@@ -75,7 +97,7 @@ const AppointmentsPage = () => {
       console.error("Error loading appointments:", error);
       setAppointments([]);
     }
-  };
+  }, []);
 
   // format
   const formatDate = (dateString: string): string => {
@@ -102,7 +124,7 @@ const AppointmentsPage = () => {
 
   // handle appointment cancellation
   const handleCancelAppointment = (appointment: AppointmentData) => {
-    Alert.alert(
+    AppAlert.alert(
       "Cancel Appointment",
       `Are you sure you want to cancel your appointment on ${formatDate(appointment.date)} at ${formatTime(appointment.date, appointment.time)}?`,
       [
@@ -116,6 +138,7 @@ const AppointmentsPage = () => {
           onPress: () => cancelAppointment(appointment),
         },
       ],
+      { icon: AlertIcon.question },
     );
   };
 
@@ -125,34 +148,44 @@ const AppointmentsPage = () => {
     setLoading(true);
   };
 
-  // handle cancellation result
-  const handleCancellationResult = (result: string) => {
-    setLoading(false);
-    setCancelingAppointment(null);
+  // handle cancellation result. Memoized for the same reason loadAppointments
+  // is: TeachAssistAuthFetcher's effect depends on onResult/onError, so an
+  // unmemoized handler here could re-fire an in-flight cancel request if
+  // this screen re-renders for an unrelated reason mid-request.
+  const handleCancellationResult = useCallback(
+    (result: string) => {
+      setLoading(false);
+      setCancelingAppointment(null);
 
-    if (
-      result.toLowerCase().includes("success") ||
-      result.toLowerCase().includes("cancelled")
-    ) {
-      Alert.alert("Success", "Appointment cancelled successfully!");
-      loadAppointments(); // Refresh the list
-    } else {
-      Alert.alert(
-        "Error",
-        result || "Failed to cancel appointment. Please try again.",
-      );
-    }
-  };
+      if (
+        result.toLowerCase().includes("success") ||
+        result.toLowerCase().includes("cancelled")
+      ) {
+        AppAlert.alert("Success", "Appointment cancelled successfully!", {
+          icon: AlertIcon.success,
+        });
+        loadAppointments(); // Refresh the list
+      } else {
+        AppAlert.alert(
+          "Error",
+          result || "Failed to cancel appointment. Please try again.",
+          { icon: AlertIcon.error },
+        );
+      }
+    },
+    [loadAppointments],
+  );
 
   // Handle cancellation error
-  const handleCancellationError = (error: string) => {
+  const handleCancellationError = useCallback((error: string) => {
     setLoading(false);
     setCancelingAppointment(null);
-    Alert.alert(
+    AppAlert.alert(
       "Error",
       error || "An error occurred while cancelling the appointment.",
+      { icon: AlertIcon.error },
     );
-  };
+  }, []);
 
   // Pull to refresh
   const onRefresh = async () => {
@@ -161,22 +194,28 @@ const AppointmentsPage = () => {
     setRefreshing(false);
   };
 
-  // Load appointments on component mount
-  useEffect(() => {
-    const loadReasonMapping = async () => {
-      try {
-        const mappingJson = await SecureStorage.load("reason_mapping");
-        if (mappingJson) {
-          setReasonMapping(JSON.parse(mappingJson));
+  // Reload every time this screen gains focus, not just on first mount —
+  // React Navigation keeps pushed screens alive in the background, so a
+  // mount-only load would keep showing whatever was booked as of the last
+  // time this screen was freshly created, which is what made newly booked
+  // appointments require a full app restart to show up.
+  useFocusEffect(
+    useCallback(() => {
+      const loadReasonMapping = async () => {
+        try {
+          const mappingJson = await SecureStorage.load("reason_mapping");
+          if (mappingJson) {
+            setReasonMapping(JSON.parse(mappingJson));
+          }
+        } catch (error) {
+          console.error("Error loading reason mapping:", error);
         }
-      } catch (error) {
-        console.error("Error loading reason mapping:", error);
-      }
-    };
+      };
 
-    loadReasonMapping();
-    loadAppointments();
-  }, []);
+      loadReasonMapping();
+      loadAppointments();
+    }, [loadAppointments]),
+  );
 
   // Render individual appointment item
   const renderAppointmentItem = ({ item }: { item: AppointmentData }) => (
@@ -186,52 +225,60 @@ const AppointmentsPage = () => {
       glassTintColor={activeTone.bg2}
       glassEffectStyle="clear"
     >
-      <View className={`flex-row justify-between items-center mb-2`}>
+      <View className={`flex-row justify-between items-start mb-3`}>
         <Text
           className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-semibold flex-1`}
         >
           {formatDate(item.date)}
         </Text>
-        <View className={`bg-baccent/80 px-3 py-2 rounded-xl`}>
+        <View className={`bg-baccent rounded-xl px-3 py-1.5 ml-3`}>
           <Text
-            className={`${isDark ? "text-appwhite" : "text-appblack"} font-normal`}
+            className={`${isDark ? "text-appblack" : "text-appwhite"} text-sm font-semibold`}
           >
             {formatTime(item.date, item.time)}
           </Text>
         </View>
       </View>
 
-      <View className={`mb-6 mt-2`}>
+      <View className={`mb-4 gap-1`}>
         {item.teacher && (
           <Text
-            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg`}
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-base`}
           >
             Counselor:{" "}
-            <Text className="text-baccent font-bold">{item.teacher}</Text>
+            <Text className="text-baccent font-semibold">{item.teacher}</Text>
           </Text>
         )}
         {item.reason && (
           <Text
-            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg`}
+            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-base`}
           >
             Appointment for:{" "}
-            <Text className="text-baccent font-bold">
+            <Text className="text-baccent font-semibold">
               {reasonMapping[item.reason] || item.reason}
             </Text>
           </Text>
         )}
         <Text
-          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-lg`}
+          className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-base`}
         >
           Booked:{" "}
-          <Text className="text-baccent font-bold">
+          <Text className="text-baccent font-semibold">
             {formatSchoolDate(new Date(item.bookedAt), "en-US")}
           </Text>
         </Text>
       </View>
 
-      <TouchableOpacity
-        className={`py-3 px-4 rounded-xl items-center bg-danger/70`}
+      <LiquidGlassButton
+        contentStyle={{
+          borderRadius: 12,
+          paddingVertical: 12,
+          paddingHorizontal: 16,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        glassTintColor={DEFAULT_STATUS_COLORS.danger}
+        fallbackBackgroundColor={DEFAULT_STATUS_COLORS.danger}
         onPress={() => {
           hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           handleCancelAppointment(item);
@@ -241,7 +288,7 @@ const AppointmentsPage = () => {
         <Text className={`text-appwhite font-semibold`}>
           Cancel Appointment
         </Text>
-      </TouchableOpacity>
+      </LiquidGlassButton>
     </LiquidGlassView>
   );
 
@@ -291,7 +338,7 @@ const AppointmentsPage = () => {
     <View className={`flex-1 ${isDark ? "bg-dark1" : "bg-light1"}`}>
       <PageBackground />
       <Modal visible={showInfo} transparent animationType="fade">
-        <View className="flex-1 bg-black/50 items-center justify-center px-4">
+        <View className="flex-1 bg-black/50 items-center justify-center px-6">
           <View
             className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6 w-full max-w-md`}
           >
@@ -372,14 +419,6 @@ const AppointmentsPage = () => {
           paddingVertical: liquidGlassEnabled ? 0 : 8,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#000",
-          shadowOpacity: isDark ? 0.18 : 0.1,
-          shadowRadius: 8,
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          elevation: 4,
         }}
         glassTintColor={activeTone.bg4}
         fallbackBackgroundColor={activeTone.bg4}
@@ -404,6 +443,7 @@ const AppointmentsPage = () => {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
+            progressViewOffset={110}
             tintColor={activeTone.accent}
             colors={[activeTone.accent, "#43a25a", "#fcc245", "#f67c15"]}
             progressBackgroundColor={activeTone.bg1}

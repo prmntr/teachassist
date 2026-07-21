@@ -3,12 +3,12 @@ import { useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Linking,
   ScrollView,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
 import {
   fetchTeacherDetails,
@@ -74,9 +74,10 @@ const TeacherDetailsPage = () => {
         if (!isActiveRequest || detailsRequestId.current !== requestId) return;
         console.warn("teacher details failed", error);
         await hapticsNotification(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(
+        AppAlert.alert(
           "Unable to Load Qualifications",
           "The teacher registry did not return details. Try again later.",
+          { icon: AlertIcon.error },
         );
       } finally {
         if (isActiveRequest && detailsRequestId.current === requestId) {

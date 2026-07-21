@@ -1,4 +1,4 @@
-﻿import { useFonts } from "expo-font";
+import { useFonts } from "expo-font";
 import { Stack } from "expo-router";
 import { useEffect } from "react";
 import { View } from "react-native";
@@ -9,8 +9,33 @@ import { getTeachAssistServerOrigin } from "@/utils/serverConfig";
 import { runVersionCheck } from "@/utils/versionCheck";
 import { AFoolVisualGradesProvider } from "@/contexts/AFoolVisualGradesContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { AppAlertHost } from "@/components/ui/AppAlert";
 import { BiometricLockOverlay } from "@/components/ui/BiometricLockOverlay";
 import "./global.css";
+
+// The Fabric renderer's dev build logs benign multi-touch warnings when extra
+// fingers' touchStart is swallowed by full-screen native overlays (expo-video
+// VideoView, expo-linear-gradient) on the new architecture. These are cosmetic,
+// dev-only (absent from production renderer), and LogBox.ignoreLogs cannot
+// silence them because LogBox still forwards console.warn to the Metro terminal.
+// Filter them at the console instead, passing every other warning through.
+if (__DEV__) {
+  const IGNORED_TOUCH_WARNINGS = [
+    "Cannot record touch move without a touch start",
+    "Ended a touch event which was not counted in `trackedTouchCount`",
+  ];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    const first = args[0];
+    if (
+      typeof first === "string" &&
+      IGNORED_TOUCH_WARNINGS.some((message) => first.startsWith(message))
+    ) {
+      return;
+    }
+    originalWarn(...args);
+  };
+}
 
 function AppShell() {
   return (
@@ -21,6 +46,7 @@ function AppShell() {
         <Stack.Screen name="courseview/[id]" />
       </Stack>
       <BiometricLockOverlay />
+      <AppAlertHost />
     </View>
   );
 }

@@ -1,8 +1,10 @@
 ﻿import * as Haptics from "expo-haptics";
 import { useLocalSearchParams } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated as RNAnimated,
+  Easing,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -16,6 +18,16 @@ import {
 import { Dropdown } from "react-native-element-dropdown";
 import { BarChart, LineChart } from "react-native-gifted-charts";
 import AnimatedProgressWheel from "react-native-progress-wheel";
+import Animated, {
+  Easing as ReanimatedEasing,
+  FadeIn,
+  FadeOut,
+  LinearTransition,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { SecureStorage } from "../(auth)/taauth";
 import Text from "@/components/ui/AppText";
@@ -26,7 +38,6 @@ import { VIEW_REPORT_OE_FIXTURE } from "@/utils/fixtures/viewReportOEFixture";
 import {
   getCategoryFullName,
   getPerformanceText,
-  getProgressColor,
   parseGradeData,
   type ParsedCourseData,
 } from "@/utils/GradeParser";
@@ -38,6 +49,10 @@ import {
   deleteParsedCourseReport,
   loadParsedCourseReport,
 } from "@/utils/courseReportCache";
+import {
+  getCoursesFromMemory,
+  primeCoursesMemoryCache,
+} from "@/utils/coursesMemoryCache";
 import { hapticsImpact } from "@/utils/haptics";
 import { useLiquidGlassActive } from "@/utils/liquidGlass";
 import { getGradeBucketColor } from "@/utils/themeSystem";
@@ -65,6 +80,28 @@ const CATEGORY_COLOR_PALETTE = [
   "#ec4899",
 ];
 
+// Fixed colour per achievement category so K/U, T, C, A, O read consistently
+// wherever they appear. OE / non-standard keys fall back to a stable palette pick.
+const CATEGORY_COLOR_MAP: Record<string, string> = {
+  K: "#27b1fa", // blue
+  T: "#2faf7f", // green
+  C: "#f59e0b", // amber
+  A: "#8b5cf6", // purple
+  O: "#ec4899", // pink
+};
+
+const getCategoryColor = (key: string) => {
+  const normalizedKey = key.toUpperCase();
+  if (CATEGORY_COLOR_MAP[normalizedKey]) {
+    return CATEGORY_COLOR_MAP[normalizedKey];
+  }
+  let hash = 0;
+  for (let i = 0; i < normalizedKey.length; i++) {
+    hash = (hash + normalizedKey.charCodeAt(i)) % CATEGORY_COLOR_PALETTE.length;
+  }
+  return CATEGORY_COLOR_PALETTE[hash];
+};
+
 const CourseViewScreen = () => {
   // no check for internet needed b/c cached from first view and course page blocks refresh that clears this
   const { activeTone, isDark, themePresetId } = useTheme(); // needed as some things need specific HEX values
@@ -78,8 +115,14 @@ const CourseViewScreen = () => {
   const subjectID = subjectIdValue ? parseInt(subjectIdValue, 10) : null;
 
   const [courseData, setCourseData] = useState<ParsedCourseData | null>(null);
-  const [storedCourses, setStoredCourses] = useState<Course[]>([]);
-  const [hasLoadedStoredCourses, setHasLoadedStoredCourses] = useState(false);
+  // Seed from the in-memory mirror so the QuickCourse header renders on the
+  // first frame instead of waiting for a keychain read.
+  const [storedCourses, setStoredCourses] = useState<Course[]>(
+    () => getCoursesFromMemory() ?? [],
+  );
+  const [hasLoadedStoredCourses, setHasLoadedStoredCourses] = useState(
+    () => getCoursesFromMemory() !== null,
+  );
   const [isDemoAccount, setIsDemoAccount] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState("Loading...");
@@ -102,31 +145,82 @@ const CourseViewScreen = () => {
   const [selectedCategoryValue, setSelectedCategoryValue] = useState<
     number | null
   >(null);
+  const [selectedAssignmentIndex, setSelectedAssignmentIndex] = useState<
+    number | null
+  >(null);
 
   useEffect(() => {
     setSelectedCategoryValue(null);
   }, [selectedCategoryKey]);
 
+  // Fades the learning-category card's content (title, value, chart) out to
+  // blank and back in on selection change, instead of a hard cut. The chart
+  // itself renders off displayedCategoryKey, not selectedCategoryKey — it
+  // only catches up once the fade-out finishes, so the content swap happens
+  // while invisible instead of instantly on tap (with the old chart then
+  // just fading out over top of the already-new one).
+  const [displayedCategoryKey, setDisplayedCategoryKey] =
+    useState(selectedCategoryKey);
+  const categoryContentOpacity = useSharedValue(1);
+  const isFirstCategoryRenderRef = useRef(true);
+  const isFirstDisplayedCategoryRenderRef = useRef(true);
+
+  useEffect(() => {
+    if (isFirstCategoryRenderRef.current) {
+      isFirstCategoryRenderRef.current = false;
+      return;
+    }
+    if (selectedCategoryKey === displayedCategoryKey) return;
+
+    categoryContentOpacity.value = withTiming(
+      0,
+      {
+        duration: 220,
+        easing: ReanimatedEasing.out(ReanimatedEasing.quad),
+      },
+      (finished) => {
+        "worklet";
+        if (finished) {
+          runOnJS(setDisplayedCategoryKey)(selectedCategoryKey);
+        }
+      },
+    );
+  }, [selectedCategoryKey, displayedCategoryKey, categoryContentOpacity]);
+
+  useEffect(() => {
+    if (isFirstDisplayedCategoryRenderRef.current) {
+      isFirstDisplayedCategoryRenderRef.current = false;
+      return;
+    }
+    categoryContentOpacity.value = withTiming(1, {
+      duration: 320,
+      easing: ReanimatedEasing.out(ReanimatedEasing.quad),
+    });
+  }, [displayedCategoryKey, categoryContentOpacity]);
+
+  const categoryContentAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: categoryContentOpacity.value,
+  }));
+
   useEffect(() => {
     const loadStoredCourses = async () => {
       try {
-        const storedCoursesJson = await SecureStorage.load("ta_courses");
-        const demoFlag = await SecureStorage.load("ta_is_demo");
-        if (demoFlag === "true") {
-          setIsDemoAccount(true);
-        } else {
-          const username = await SecureStorage.load("ta_username");
-          const password = await SecureStorage.load("ta_password");
-          setIsDemoAccount(username === "123456789" && password === "password");
-        }
+        const [storedCoursesJson, demoFlag, username, password] =
+          await Promise.all([
+            SecureStorage.load("ta_courses"),
+            SecureStorage.load("ta_is_demo"),
+            SecureStorage.load("ta_username"),
+            SecureStorage.load("ta_password"),
+          ]);
+        setIsDemoAccount(
+          demoFlag === "true" ||
+            (username === "123456789" && password === "password"),
+        );
 
-        if (!storedCoursesJson) {
-          setStoredCourses([]);
-          return;
-        }
-
-        const parsedCourses = JSON.parse(storedCoursesJson);
-        setStoredCourses(Array.isArray(parsedCourses) ? parsedCourses : []);
+        // Priming keeps the same parsed array when the JSON is unchanged, so
+        // this set bails out of a re-render on the common warm path.
+        primeCoursesMemoryCache(storedCoursesJson);
+        setStoredCourses(getCoursesFromMemory() ?? []);
       } catch {
         setStoredCourses([]);
       } finally {
@@ -416,6 +510,21 @@ const CourseViewScreen = () => {
     return getCategoryFullName(normalizedKey);
   };
 
+  // Compact category codes for the assignment tooltip. Standard achievement
+  // categories map to their short form (K/U, T, C, A, O); OE keys like "A1"
+  // fall through unchanged.
+  const getCategoryShortLabel = (key: string) => {
+    const normalizedKey = key.toUpperCase();
+    const shortNames: Record<string, string> = {
+      K: "K/U",
+      T: "T",
+      C: "C",
+      A: "A",
+      O: "O",
+    };
+    return shortNames[normalizedKey] ?? normalizedKey;
+  };
+
   useEffect(() => {
     const availableKeys = Array.from(
       new Set(
@@ -432,13 +541,37 @@ const CourseViewScreen = () => {
     }
   }, [courseData, selectedCategoryKey]);
 
+  // Persistent rotation value per assignment index, so each card's chevron
+  // animates independently of the others.
+  const assignmentChevronRotations = useRef<Map<number, RNAnimated.Value>>(
+    new Map(),
+  ).current;
+
+  const getAssignmentChevronRotation = (index: number) => {
+    let rotation = assignmentChevronRotations.get(index);
+    if (!rotation) {
+      rotation = new RNAnimated.Value(expandedAssignments.has(index) ? 1 : 0);
+      assignmentChevronRotations.set(index, rotation);
+    }
+    return rotation;
+  };
+
   const toggleAssignmentExpansion = (index: number) => {
     const newExpanded = new Set(expandedAssignments);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
+    const willExpand = !newExpanded.has(index);
+    if (willExpand) {
       newExpanded.add(index);
+    } else {
+      newExpanded.delete(index);
     }
+
+    RNAnimated.timing(getAssignmentChevronRotation(index), {
+      toValue: willExpand ? 1 : 0,
+      duration: 250,
+      easing: Easing.inOut(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+
     setExpandedAssignments(newExpanded);
   };
 
@@ -503,6 +636,20 @@ const CourseViewScreen = () => {
       }
     });
     setExpandedAssignments(updatedExpanded);
+
+    // Shift chevron rotation values to match the reindexed assignments
+    const updatedRotations = new Map<number, RNAnimated.Value>();
+    assignmentChevronRotations.forEach((value, key) => {
+      if (key < index) {
+        updatedRotations.set(key, value);
+      } else if (key > index) {
+        updatedRotations.set(key - 1, value);
+      }
+    });
+    assignmentChevronRotations.clear();
+    updatedRotations.forEach((value, key) => {
+      assignmentChevronRotations.set(key, value);
+    });
   };
 
   // Types for assignment modal
@@ -668,7 +815,7 @@ const CourseViewScreen = () => {
           className="flex-1 mb-10"
           behavior={Platform.OS === "ios" ? "padding" : "padding"}
         >
-          <View className="flex-1 bg-black/50 items-center justify-end px-4 pt-6">
+          <View className="flex-1 bg-black/50 items-center justify-end px-5 pt-6">
             <LiquidGlassView
               containerClassName="w-full max-w-md"
               className="rounded-xl py-6"
@@ -909,7 +1056,12 @@ const CourseViewScreen = () => {
         return;
       }
 
-      const currentUserName = await getUser();
+      const [currentUserName, cachedReport] = await Promise.all([
+        getUser(),
+        subjectID !== null
+          ? loadParsedCourseReport(subjectID)
+          : Promise.resolve(null),
+      ]);
 
       // test users courses
       if (currentUserName?.includes("123456789")) {
@@ -929,7 +1081,7 @@ const CourseViewScreen = () => {
                 },
               },
               feedback:
-                "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum cursus eleifend. Aliquam eleifend eleifend nunc, sit amet interdum dui fringilla in. ",
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Praesent rutrum cursus eleifend. Aliquam eleifend eleifend nunc, sit amet interdum dui fringilla in. \n\n i may not be completely straight",
             },
             {
               name: "Research Report: How to find Easter Eggs",
@@ -1115,8 +1267,6 @@ const CourseViewScreen = () => {
         return;
       }
 
-      const cachedReport = await loadParsedCourseReport(subjectID);
-
       if (cachedReport) {
         const parsedData = cachedReport;
         setCourseData(parsedData);
@@ -1200,195 +1350,207 @@ const CourseViewScreen = () => {
         const isExpanded = expandedAssignments.has(index);
         const assignmentMark = calculateWeightedMark(assignment.categories);
         const visualAssignmentMark = getVisualGradeValue(assignmentMark);
+        const chevronRotation = getAssignmentChevronRotation(index).interpolate(
+          {
+            inputRange: [0, 1],
+            outputRange: ["0deg", "90deg"],
+          },
+        );
         return (
-          <LiquidGlassButton
-            key={index}
-            className="rounded-xl p-5 mb-4 "
-            fallbackBackgroundColor={activeTone.bg3}
-            glassTintColor={activeTone.bg2}
-            glassEffectStyle="clear"
-            activeOpacity={liquidGlassEnabled ? 0.2 : 1}
-            onPress={() => {
-              hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
-              toggleAssignmentExpansion(index);
-            }}
-          >
-            <View className={`flex-row justify-between items-center`}>
-              <View className={`flex-1`}>
-                <View className="flex-row">
-                  {assignment.formative && (
-                    <Text
-                      className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
-                    >
-                      Formative
-                    </Text>
-                  )}
-                  {assignment.formative && assignment.feedback && (
-                    <Text
-                      className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
-                    >
-                      {` • `}
-                    </Text>
-                  )}
-                  {assignment.feedback && (
-                    <Text
-                      className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
-                    >
-                      Feedback
-                    </Text>
-                  )}
-                </View>
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-1`}
-                >
-                  {assignment.name}
-                </Text>
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm`}
-                >
-                  {getPerformanceText(visualAssignmentMark)}
-                </Text>
-              </View>
-
-              <View className={`flex-row items-center`}>
-                <View className={`mr-3 items-center justify-center`}>
-                  <AnimatedProgressWheel
-                    size={70}
-                    width={6}
-                    color={
-                      themePresetId === "default"
-                        ? getGradeBucketColor(
-                            visualAssignmentMark,
-                            activeTone.accent,
-                          )
-                        : activeTone.accent
-                    }
-                    backgroundColor={activeTone.bg4}
-                    progress={visualAssignmentMark ?? NaN}
-                    max={100}
-                    rounded={true}
-                    rotation={"-90deg"}
-                    delay={75}
-                    duration={400}
-                    showPercentageSymbol={true}
-                  />
-                  <View className="absolute">
-                    <Text
-                      style={{
-                        color:
-                          themePresetId === "default"
-                            ? getGradeBucketColor(
-                                visualAssignmentMark,
-                                activeTone.accent,
-                              )
-                            : activeTone.accent,
-                        fontSize: 14,
-                        fontWeight: "600",
-                      }}
-                    >
-                      {getVisualGradeLabel(assignmentMark)}
-                      {/* TA only has up to 1 */}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* button to make big/small */}
-                <Image
-                  className={`w-6 h-6`}
-                  style={{
-                    tintColor: `${isDark ? "#85868e" : "#6d6e77"}`,
-                    transform: [{ rotate: isExpanded ? "90deg" : "0deg" }],
-                  }}
-                  source={require("../../assets/images/arrow-icon.png")}
-                />
-              </View>
-            </View>
-
-            {isExpanded && (
-              <>
-                <View className={`space-y-3 mt-4`}>
-                  {Object.entries(assignment.categories).map(([key, value]) => {
-                    if (!value) return null;
-                    const rawPercentage = parseInt(
-                      value.percentage.replace("%", ""),
-                      10,
-                    );
-                    const visualPercentage = getVisualGradeValue(
-                      isNaN(rawPercentage) ? 0 : rawPercentage,
-                    );
-
-                    return (
-                      <View key={key} className={`mb-3`}>
-                        <View
-                          className={`flex-row justify-between items-center mb-1`}
-                        >
-                          <Text
-                            className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-sm w-40`}
-                            style={{
-                              width: `85%`,
-                            }}
-                          >
-                            {getCategoryDisplayName(key)}
-                          </Text>
-                          <View className={`flex-row items-center`}>
-                            <Text
-                              className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-bold`}
-                            >
-                              {getVisualPercentage(value.percentage)}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <View
-                          className={`rounded-full h-2 overflow-hidden ${isDark ? "bg-dark4" : "bg-light4"}`}
-                        >
-                          <View
-                            className={`h-full rounded-full ${getProgressColor(
-                              visualPercentage,
-                            )}`}
-                            style={{
-                              width: `${Math.min(visualPercentage, 100)}%`,
-                            }}
-                          />
-                        </View>
-
-                        <View
-                          className={`flex-row justify-between items-center mt-1`}
-                        >
-                          <Text
-                            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
-                          >
-                            Weight: {value.weight || "0"}
-                          </Text>
-                          <Text
-                            className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
-                          >
-                            {value.score}
-                          </Text>
-                        </View>
-                      </View>
-                    );
-                  })}
-                  {assignment.feedback !== undefined && (
-                    <View
-                      className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-xl p-4 mt-1`}
-                    >
+          <Animated.View key={index} layout={LinearTransition.duration(250)}>
+            <LiquidGlassButton
+              className="rounded-xl p-5 mb-4 "
+              fallbackBackgroundColor={activeTone.bg3}
+              glassTintColor={activeTone.bg2}
+              glassEffectStyle="clear"
+              activeOpacity={liquidGlassEnabled ? 0.2 : 1}
+              onPress={() => {
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
+                toggleAssignmentExpansion(index);
+              }}
+            >
+              <View className={`flex-row justify-between items-center`}>
+                <View className={`flex-1`}>
+                  <View className="flex-row">
+                    {assignment.formative && (
                       <Text
-                        className={`${isDark ? "text-baccent/95" : "text-baccent"} text-lg font-medium`}
+                        className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
                       >
-                        Teacher Feedback
+                        Formative
                       </Text>
+                    )}
+                    {assignment.formative && assignment.feedback && (
                       <Text
-                        className={`${isDark ? "text-appwhite/70" : "text-appblack/70"} font-light`}
+                        className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
                       >
-                        {assignment.feedback}
+                        {` • `}
+                      </Text>
+                    )}
+                    {assignment.feedback && (
+                      <Text
+                        className={`text-baccent text-xs font-semibold mb-1 uppercase tracking-wide`}
+                      >
+                        Feedback
+                      </Text>
+                    )}
+                  </View>
+                  <Text
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold mb-1`}
+                  >
+                    {assignment.name}
+                  </Text>
+                  <Text
+                    className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm`}
+                  >
+                    {getPerformanceText(visualAssignmentMark)}
+                  </Text>
+                </View>
+
+                <View className={`flex-row items-center`}>
+                  <View className={`mr-3 items-center justify-center`}>
+                    <AnimatedProgressWheel
+                      size={70}
+                      width={6}
+                      color={
+                        themePresetId === "default"
+                          ? getGradeBucketColor(
+                              visualAssignmentMark,
+                              activeTone.accent,
+                            )
+                          : activeTone.accent
+                      }
+                      backgroundColor={activeTone.bg4}
+                      progress={visualAssignmentMark ?? NaN}
+                      max={100}
+                      rounded={true}
+                      rotation={"-90deg"}
+                      delay={75}
+                      duration={400}
+                      showPercentageSymbol={true}
+                    />
+                    <View className="absolute">
+                      <Text
+                        style={{
+                          color:
+                            themePresetId === "default"
+                              ? getGradeBucketColor(
+                                  visualAssignmentMark,
+                                  activeTone.accent,
+                                )
+                              : activeTone.accent,
+                          fontSize: 14,
+                          fontWeight: "600",
+                        }}
+                      >
+                        {getVisualGradeLabel(assignmentMark)}
+                        {/* TA only has up to 1 */}
                       </Text>
                     </View>
-                  )}
+                  </View>
+
+                  {/* button to make big/small */}
+                  <RNAnimated.Image
+                    className={`w-6 h-6`}
+                    style={{
+                      tintColor: `${isDark ? "#85868e" : "#6d6e77"}`,
+                      transform: [{ rotate: chevronRotation }],
+                    }}
+                    source={require("../../assets/images/arrow-icon.png")}
+                  />
                 </View>
-                <View
-                  className={`mt-4 pt-4 border-t border-1 ${isDark ? "border-appgraydark" : "border-appgraylight"}`}
+              </View>
+
+              {isExpanded && (
+                <Animated.View
+                  entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(150)}
                 >
+                  <View className={`space-y-3 mt-4`}>
+                    {Object.entries(assignment.categories).map(
+                      ([key, value]) => {
+                        if (!value) return null;
+                        const rawPercentage = Math.round(
+                          parseFloat(value.percentage.replace("%", "")),
+                        );
+                        const visualPercentage = getVisualGradeValue(
+                          isNaN(rawPercentage) ? 0 : rawPercentage,
+                        );
+
+                        return (
+                          <View key={key} className={`mb-3`}>
+                            <View
+                              className={`flex-row justify-between items-center mb-1`}
+                            >
+                              <Text
+                                className={`${isDark ? "text-appwhite" : "text-appblack"} font-semibold text-sm w-40`}
+                                style={{
+                                  width: `85%`,
+                                }}
+                              >
+                                {getCategoryDisplayName(key)}
+                              </Text>
+                              <View className={`flex-row items-center`}>
+                                <Text
+                                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-lg font-bold`}
+                                >
+                                  {getVisualPercentage(value.percentage)}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View
+                              className={`rounded-full h-2 overflow-hidden ${isDark ? "bg-dark4" : "bg-light4"}`}
+                            >
+                              <View
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(visualPercentage, 100)}%`,
+                                  backgroundColor: getGradeBucketColor(
+                                    visualPercentage,
+                                    activeTone.accent,
+                                  ),
+                                }}
+                              />
+                            </View>
+
+                            <View
+                              className={`flex-row justify-between items-center mt-1`}
+                            >
+                              <Text
+                                className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
+                              >
+                                Weight: {value.weight || "0"}
+                              </Text>
+                              <Text
+                                className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
+                              >
+                                {value.score}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      },
+                    )}
+                    {assignment.feedback !== undefined && (
+                      <View
+                        className={`${isDark ? "bg-dark4" : "bg-light4"} rounded-xl p-4 mt-1`}
+                      >
+                        <Text
+                          className={`${isDark ? "text-baccent/95" : "text-baccent"} text-lg font-medium`}
+                        >
+                          Teacher Feedback
+                        </Text>
+                        <Text
+                          className={`${isDark ? "text-appwhite/70" : "text-appblack/70"} font-light`}
+                        >
+                          {assignment.feedback}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View className={`mt-0`}>
+                    {/* 
+                  <View className={`mb-4 border-t border-1 ${isDark ? "border-appgraydark" : "border-appgraylight"}`}></View>
                   <View className={`flex-row items-center justify-center mb-1`}>
                     <Text
                       className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-xs font-light`}
@@ -1406,72 +1568,78 @@ const CourseViewScreen = () => {
                       graded
                     </Text>
                   </View>
+                  */}
 
-                  {/* edit and delete btns */}
-                  {isEditMode && (
-                    <View className="flex-row gap-3 mt-4">
-                      <LiquidGlassButton
-                        containerStyle={{ flex: 1 }}
-                        contentStyle={{
-                          borderRadius: 12,
-                          paddingHorizontal: 12,
-                          paddingVertical: 12,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                        glassTintColor={activeTone.bg4}
-                        fallbackBackgroundColor={activeTone.bg4}
-                        onPress={() => {
-                          hapticsImpact(Haptics.ImpactFeedbackStyle.Medium);
-                          setEditingAssignmentIndex(index);
-                        }}
-                      >
-                        <Image
-                          className="w-4 h-4"
-                          style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
-                          source={require("../../assets/images/pencil.png")}
-                        />
-                        <Text
-                          className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium ml-2`}
+                    {/* edit and delete btns */}
+                    {isEditMode && (
+                      <View className="flex-row gap-3 mt-4">
+                        <LiquidGlassButton
+                          containerStyle={{ flex: 1 }}
+                          contentStyle={{
+                            borderRadius: 12,
+                            paddingHorizontal: 12,
+                            paddingVertical: 12,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          glassTintColor={activeTone.bg4}
+                          fallbackBackgroundColor={activeTone.bg4}
+                          onPress={() => {
+                            hapticsImpact(Haptics.ImpactFeedbackStyle.Medium);
+                            setEditingAssignmentIndex(index);
+                          }}
                         >
-                          Edit
-                        </Text>
-                      </LiquidGlassButton>
-                      <LiquidGlassButton
-                        containerStyle={{ flex: 1 }}
-                        contentStyle={{
-                          borderRadius: 12,
-                          paddingHorizontal: 12,
-                          paddingVertical: 12,
-                          flexDirection: "row",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                        glassTintColor={"#ef444444"}
-                        fallbackBackgroundColor={"#ef444477"}
-                        onPress={() => {
-                          hapticsImpact(Haptics.ImpactFeedbackStyle.Medium);
-                          deleteAssignment(index);
-                        }}
-                      >
-                        <Image
-                          className="w-4 h-4"
-                          style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
-                          source={require("../../assets/images/trash-bin.png")}
-                        />
-                        <Text
-                          className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium ml-2`}
+                          <Image
+                            className="w-4 h-4"
+                            style={{
+                              tintColor: isDark ? "#edebea" : "#2f3035",
+                            }}
+                            source={require("../../assets/images/pencil.png")}
+                          />
+                          <Text
+                            className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium ml-2`}
+                          >
+                            Edit
+                          </Text>
+                        </LiquidGlassButton>
+                        <LiquidGlassButton
+                          containerStyle={{ flex: 1 }}
+                          contentStyle={{
+                            borderRadius: 12,
+                            paddingHorizontal: 12,
+                            paddingVertical: 12,
+                            flexDirection: "row",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                          glassTintColor={"#ef444444"}
+                          fallbackBackgroundColor={"#ef444477"}
+                          onPress={() => {
+                            hapticsImpact(Haptics.ImpactFeedbackStyle.Medium);
+                            deleteAssignment(index);
+                          }}
                         >
-                          Delete
-                        </Text>
-                      </LiquidGlassButton>
-                    </View>
-                  )}
-                </View>
-              </>
-            )}
-          </LiquidGlassButton>
+                          <Image
+                            className="w-4 h-4"
+                            style={{
+                              tintColor: isDark ? "#edebea" : "#2f3035",
+                            }}
+                            source={require("../../assets/images/trash-bin.png")}
+                          />
+                          <Text
+                            className={`${isDark ? "text-appwhite" : "text-appblack"} font-medium ml-2`}
+                          >
+                            Delete
+                          </Text>
+                        </LiquidGlassButton>
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+              )}
+            </LiquidGlassButton>
+          </Animated.View>
         );
       })}
 
@@ -1754,10 +1922,10 @@ const CourseViewScreen = () => {
       return left.localeCompare(right, undefined, { numeric: true });
     });
 
-    const categories = categoryKeys.map((key, index) => ({
+    const categories = categoryKeys.map((key) => ({
       key,
       name: getCategoryDisplayName(key),
-      color: CATEGORY_COLOR_PALETTE[index % CATEGORY_COLOR_PALETTE.length],
+      color: getCategoryColor(key),
     }));
     const categoryOptions = categories.map((category) => ({
       label: category.name,
@@ -1765,7 +1933,7 @@ const CourseViewScreen = () => {
     }));
 
     const selectedCategory =
-      categories.find((category) => category.key === selectedCategoryKey) ??
+      categories.find((category) => category.key === displayedCategoryKey) ??
       categories[0];
     const selectedCategoryData = getCategoryLineData(selectedCategory.key);
     const selectedCategoryAxisConfig = getAxisConfig(
@@ -1795,6 +1963,25 @@ const CourseViewScreen = () => {
       }
       return `${Math.min(adjustment + value, 100).toFixed(1)}%`;
     };
+
+    // Assignment tapped in the overview bar chart. Shown as a detail card below
+    // the chart (rather than a floating tooltip, which the chart container clips).
+    const selectedAssignment =
+      selectedAssignmentIndex !== null
+        ? (chronologicalAssignments[selectedAssignmentIndex] ?? null)
+        : null;
+    const selectedAssignmentBreakdown = selectedAssignment
+      ? Object.entries(selectedAssignment.categories)
+          .filter(([, catValue]) => catValue !== null)
+          .map(([catKey, catValue]) => ({
+            key: catKey,
+            label: getCategoryShortLabel(catKey),
+            color: getCategoryColor(catKey),
+            percentage: getVisualPercentage(
+              (catValue as { percentage?: string }).percentage,
+            ),
+          }))
+      : [];
 
     return (
       <View className={`w-full`}>
@@ -1877,7 +2064,7 @@ const CourseViewScreen = () => {
                 : `Learning Categories`}
             </Text>
 
-            <View style={{ minWidth: 150 }} className="">
+            <View style={{ minWidth: 150 }}>
               <Dropdown
                 style={[
                   styles.dropdown,
@@ -1916,6 +2103,7 @@ const CourseViewScreen = () => {
                           backgroundColor: activeTone.bg4,
                           borderColor: activeTone.bg4,
                           borderRadius: 8,
+                          overflow: "hidden",
                         },
                       ]
                     : [
@@ -1924,6 +2112,7 @@ const CourseViewScreen = () => {
                           backgroundColor: activeTone.bg4,
                           borderColor: activeTone.bg4,
                           borderRadius: 8,
+                          overflow: "hidden",
                         },
                       ]
                 }
@@ -1932,7 +2121,6 @@ const CourseViewScreen = () => {
                   return (
                     <View
                       style={{
-                        flex: 1,
                         margin: 7,
                         justifyContent: "center",
                       }}
@@ -1981,63 +2169,68 @@ const CourseViewScreen = () => {
               glassTintColor={activeTone.bg2}
               glassEffectStyle="clear"
             >
-              <View className="flex-row justify-between items-center mb-4">
-                <Text
-                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
-                >
-                  {selectedCategory.name}
-                </Text>
-                <Text
-                  style={{ color: selectedCategory.color }}
-                  className={`font-[${selectedCategory.color} font-bold text-xl`}
-                >
-                  {formatSelectedValue(
-                    selectedCategoryValue,
-                    selectedCategoryValueAdjustment,
-                  )}
-                </Text>
-              </View>
-              <View className="pr-2">
-                <LineChart
-                  data={selectedCategoryData}
-                  isAnimated={!isLandscape}
-                  scrollAnimation={!isLandscape}
-                  height={150}
-                  spacing={selectedCategoryData.length > 4 ? 45 : 55}
-                  initialSpacing={15}
-                  endSpacing={15}
-                  color={selectedCategory.color}
-                  thickness={3}
-                  curved
-                  focusEnabled
-                  onFocus={(item: { value?: number }) => {
-                    if (typeof item?.value === "number") {
-                      setSelectedCategoryValue(item.value);
-                    }
-                  }}
-                  showStripOnFocus
-                  showTextOnFocus={false}
-                  dataPointsColor={selectedCategory.color}
-                  dataPointsRadius={4}
-                  yAxisTextStyle={{
-                    color: `${isDark ? "#edebea" : "#2f3035"}`,
-                    fontSize: 11,
-                  }}
-                  xAxisLabelsHeight={0}
-                  yAxisLabelSuffix="%"
-                  maxValue={selectedCategoryAxisConfig.maxValue}
-                  yAxisOffset={selectedCategoryAxisConfig.yAxisOffset}
-                  stripOpacity={0.4}
-                  noOfSections={4}
-                  hideRules
-                  xAxisThickness={0}
-                  yAxisThickness={0}
-                  formatYLabel={(value) => `${Math.round(Number(value))}`}
-                  unFocusOnPressOut={false}
-                  focusedDataPointColor={selectedCategory.color}
-                  focusedDataPointRadius={6}
-                />
-              </View>
+              {/* Only the text/chart content dissolves on category switch —
+                  the card itself (background/blur) stays mounted so it
+                  never pops. */}
+              <Animated.View style={categoryContentAnimatedStyle}>
+                <View className="flex-row justify-between items-center mb-4">
+                  <Text
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
+                  >
+                    {selectedCategory.name}
+                  </Text>
+                  <Text
+                    style={{ color: selectedCategory.color }}
+                    className={`font-[${selectedCategory.color} font-bold text-xl`}
+                  >
+                    {formatSelectedValue(
+                      selectedCategoryValue,
+                      selectedCategoryValueAdjustment,
+                    )}
+                  </Text>
+                </View>
+                <View className="pr-2">
+                  <LineChart
+                    data={selectedCategoryData}
+                    isAnimated={!isLandscape}
+                    scrollAnimation={!isLandscape}
+                    height={150}
+                    spacing={selectedCategoryData.length > 4 ? 45 : 55}
+                    initialSpacing={15}
+                    endSpacing={15}
+                    color={selectedCategory.color}
+                    thickness={3}
+                    curved
+                    focusEnabled
+                    onFocus={(item: { value?: number }) => {
+                      if (typeof item?.value === "number") {
+                        setSelectedCategoryValue(item.value);
+                      }
+                    }}
+                    showStripOnFocus
+                    showTextOnFocus={false}
+                    dataPointsColor={selectedCategory.color}
+                    dataPointsRadius={4}
+                    yAxisTextStyle={{
+                      color: `${isDark ? "#edebea" : "#2f3035"}`,
+                      fontSize: 11,
+                    }}
+                    xAxisLabelsHeight={0}
+                    yAxisLabelSuffix="%"
+                    maxValue={selectedCategoryAxisConfig.maxValue}
+                    yAxisOffset={selectedCategoryAxisConfig.yAxisOffset}
+                    stripOpacity={0.4}
+                    noOfSections={4}
+                    hideRules
+                    xAxisThickness={0}
+                    yAxisThickness={0}
+                    formatYLabel={(value) => `${Math.round(Number(value))}`}
+                    unFocusOnPressOut={false}
+                    focusedDataPointColor={selectedCategory.color}
+                    focusedDataPointRadius={6}
+                  />
+                </View>
+              </Animated.View>
             </LiquidGlassView>
           )}
         </View>
@@ -2057,9 +2250,15 @@ const CourseViewScreen = () => {
           <View className={`mr-4 flex items-center justify-center`}>
             <BarChart
               data={assignmentData}
+              onPress={(_item: unknown, index: number) => {
+                hapticsImpact(Haptics.ImpactFeedbackStyle.Soft);
+                setSelectedAssignmentIndex((prev) =>
+                  prev === index ? null : index,
+                );
+              }}
               isAnimated={!isLandscape}
               scrollAnimation={!isLandscape}
-              height={230}
+              height={180}
               barWidth={30}
               spacing={12}
               roundedTop
@@ -2091,6 +2290,74 @@ const CourseViewScreen = () => {
               formatYLabel={(value) => `${Math.round(Number(value))}`}
             />
           </View>
+          {selectedAssignment && (
+            <Animated.View
+              key={selectedAssignmentIndex}
+              entering={FadeIn.duration(200)}
+              exiting={FadeOut.duration(150)}
+            >
+              <View
+                className="mt-1 mb-3 rounded-xl px-4 py-3"
+                style={{
+                  backgroundColor: activeTone.bg4,
+                }}
+              >
+                <View className="flex-row items-center justify-between mb-2">
+                  <Text
+                    numberOfLines={2}
+                    className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold text-base flex-1 mr-2`}
+                  >
+                    {selectedAssignment.name}
+                  </Text>
+                  <Text
+                    className="font-bold text-base"
+                    style={{
+                      color: getGradeBucketColor(
+                        getVisualGradeValue(
+                          calculateWeightedMark(
+                            selectedAssignment.categories,
+                          ) || 0,
+                        ),
+                        activeTone.accent,
+                      ),
+                    }}
+                  >
+                    {getVisualGradeLabel(
+                      calculateWeightedMark(selectedAssignment.categories),
+                    )}
+                  </Text>
+                </View>
+                {selectedAssignmentBreakdown.length > 0 ? (
+                  <View className="flex-row flex-wrap">
+                    {selectedAssignmentBreakdown.map((cat) => (
+                      <View
+                        key={cat.key}
+                        className="mr-4 mb-1 flex-row items-center"
+                      >
+                        <Text
+                          style={{ color: cat.color }}
+                          className="text-sm font-bold mr-1"
+                        >
+                          {cat.label}
+                        </Text>
+                        <Text
+                          className={`${isDark ? "text-appwhite" : "text-appblack"} text-sm font-semibold`}
+                        >
+                          {cat.percentage}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text
+                    className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm`}
+                  >
+                    No category marks
+                  </Text>
+                )}
+              </View>
+            </Animated.View>
+          )}
         </LiquidGlassView>
 
         {/* random stuff */}
@@ -2173,7 +2440,7 @@ const CourseViewScreen = () => {
         </LiquidGlassView>
         {courseData?.reportType === "oe" ? (
           <LiquidGlassView
-            className="rounded-xl p-4  mb-2"
+            className="rounded-xl p-4 mb-2"
             fallbackBackgroundColor={activeTone.bg3}
             glassTintColor={activeTone.bg2}
             glassEffectStyle="clear"
@@ -2221,7 +2488,7 @@ const CourseViewScreen = () => {
           </LiquidGlassView>
         ) : (
           <LiquidGlassView
-            className="rounded-xl p-4  mb-2"
+            className="rounded-xl p-4 mb-2"
             fallbackBackgroundColor={activeTone.bg3}
             glassTintColor={activeTone.bg2}
             glassEffectStyle="clear"
@@ -2238,7 +2505,10 @@ const CourseViewScreen = () => {
               >
                 Knowledge/Understanding
               </Text>
-              <Text className={`text-baccent font-bold`}>
+              <Text
+                className={`font-bold`}
+                style={{ color: getCategoryColor("K") }}
+              >
                 {courseData?.summary?.courseWeightings?.knowledge ?? ""}
               </Text>
             </View>
@@ -2249,7 +2519,10 @@ const CourseViewScreen = () => {
               >
                 Thinking
               </Text>
-              <Text className={`text-success font-bold`}>
+              <Text
+                className={`font-bold`}
+                style={{ color: getCategoryColor("T") }}
+              >
                 {courseData?.summary?.courseWeightings?.thinking ?? ""}
               </Text>
             </View>
@@ -2260,7 +2533,10 @@ const CourseViewScreen = () => {
               >
                 Communication
               </Text>
-              <Text className={`text-caution font-bold`}>
+              <Text
+                className={`font-bold`}
+                style={{ color: getCategoryColor("C") }}
+              >
                 {courseData?.summary?.courseWeightings?.communication ?? ""}
               </Text>
             </View>
@@ -2271,7 +2547,10 @@ const CourseViewScreen = () => {
               >
                 Application
               </Text>
-              <Text className={`text-danger font-bold`}>
+              <Text
+                className={`font-bold`}
+                style={{ color: getCategoryColor("A") }}
+              >
                 {courseData?.summary?.courseWeightings?.application ?? ""}
               </Text>
             </View>
@@ -2282,7 +2561,8 @@ const CourseViewScreen = () => {
                 Other/Culminating
               </Text>
               <Text
-                className={`${isDark ? "text-appwhite" : "text-appblack"} font-bold`}
+                className={`font-bold`}
+                style={{ color: getCategoryColor("O") }}
               >
                 {otherWeightingDisplay}
               </Text>
@@ -2294,7 +2574,7 @@ const CourseViewScreen = () => {
         >
           {courseData?.reportType === "oe"
             ? `OE reports do not expose KTCA weightings.${`\n`}Analytics use assignment and expectation averages instead.`
-            : `Analytics are based on summative assignments only.${`\n`}The cake is a lie!`}
+            : `Analytics are based on summative assignments only.${`\n`}wowie zowie`}
         </Text>
       </View>
     );
@@ -2306,11 +2586,10 @@ const CourseViewScreen = () => {
           parseWeightingValue(courseData.summary.courseWeightings.final),
       )
     : "";
-  const fallbackCourseName =
-    storedCourses.find(
-      (course) =>
-        String(course.subjectId ?? "") === String(subjectIdValue ?? ""),
-    )?.courseName ?? "Course";
+  const matchedStoredCourse = storedCourses.find(
+    (course) => String(course.subjectId ?? "") === String(subjectIdValue ?? ""),
+  );
+  const fallbackCourseName = matchedStoredCourse?.courseName ?? "Course";
   const displayCourseName =
     courseData?.courseName && courseData.courseName !== "Course"
       ? courseData.courseName
@@ -2361,14 +2640,6 @@ const CourseViewScreen = () => {
           padding: liquidGlassEnabled ? 0 : 8,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#000",
-          shadowOpacity: isDark ? 0.18 : 0.1,
-          shadowRadius: 8,
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          elevation: 4,
         }}
         glassTintColor={isEditMode ? activeTone.accent : activeTone.bg4}
         fallbackBackgroundColor={
@@ -2396,7 +2667,7 @@ const CourseViewScreen = () => {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 40 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 10 }}
       >
         {isLandscape && (
           <Text
@@ -2444,7 +2715,7 @@ const CourseViewScreen = () => {
                       glassTintColor={activeTone.bg2}
                       glassEffectStyle="clear"
                     >
-                      <View className="flex-row justify-between gap-4">
+                      <View className="flex-row items-center justify-between gap-4">
                         {/* Left content - takes remaining space */}
                         <View style={{ zIndex: 1, flex: 1 }}>
                           <View className="flex-row items-center justify-between mb-1">
@@ -2504,7 +2775,7 @@ const CourseViewScreen = () => {
                         </View>
 
                         {/* Right content - fixed width */}
-                        <View style={{ flexShrink: 0 }} className="mt-10">
+                        <View style={{ flexShrink: 0 }}>
                           <View className="items-center justify-center">
                             <AnimatedProgressWheel
                               size={90}
@@ -2541,7 +2812,9 @@ const CourseViewScreen = () => {
                     <QuickCourse
                       courses={storedCourses}
                       subjectId={subjectIdValue}
-                      overrideCourseMark={courseAverage}
+                      overrideCourseMark={
+                        matchedStoredCourse?.hasGrade ? courseAverage : null
+                      }
                       isLoading={!hasLoadedStoredCourses}
                     />
                   )}
@@ -2677,7 +2950,6 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   dropdownMenuLight: {
-    backgroundColor: "#e7e7e9",
     borderRadius: 0,
   },
 });

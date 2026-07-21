@@ -1,5 +1,7 @@
 ﻿import * as Haptics from "expo-haptics";
-import { Alert, Image, ScrollView, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, TouchableOpacity, View } from "react-native";
+import Animated, { FadeIn } from "react-native-reanimated";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import { hapticsImpact } from "@/utils/haptics";
 import { buildTeachAssistStudentsUrlSync } from "@/utils/serverConfig";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -57,7 +59,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
               Appointment Update
             </Text>
             <Image
-              source={require("../../assets/images/refresh.png")}
+              source={require("../assets/images/refresh.png")}
               className={`w-20 h-20 my-3`}
               style={{ tintColor: "#27b1fa" }}
             />
@@ -159,7 +161,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
         >
           <View className="flex items-center justify-center">
             <Image
-              source={require("../../assets/images/not_found.png")}
+              source={require("../assets/images/not_found.png")}
               className="w-30 h-30 my-3"
               style={{ tintColor: activeTone.accent }}
             />
@@ -180,7 +182,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
 
   const handleAppointmentPress = (appointment: AppointmentSlot) => {
     hapticsImpact(Haptics.ImpactFeedbackStyle.Soft);
-    Alert.alert(
+    AppAlert.alert(
       "Book Appointment",
       `Book with ${appointment.counselorName} at ${formatTime(appointment.time)}?`,
       [
@@ -197,6 +199,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           },
         },
       ],
+      { icon: AlertIcon.calendar },
     );
   };
 
@@ -252,7 +255,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
               {date}
             </Text>
             <Image
-              source={require("../../assets/images/not_found.png")}
+              source={require("../assets/images/not_found.png")}
               className={`w-30 h-30 my-3`}
               style={{ tintColor: activeTone.accent }}
             />
@@ -284,33 +287,38 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
           paddingBottom: 20,
         }}
       >
-        <View
-          className={`mb-5 ${isDark ? "bg-dark4" : "bg-light2"} p-3 py-5 rounded-xl`}
-        >
-          <Text
-            className={`text-xl text-baccent font-semibold mb-2 text-center`}
+        <Animated.View entering={FadeIn.duration(300)}>
+          <View
+            className={`mb-5 ${isDark ? "bg-dark4" : "bg-light2"} p-3 py-5 rounded-xl`}
           >
-            {date}
-          </Text>
-          <Text
-            className={`text-emerald-500 text-2xl font-semibold text-center`}
-          >
-            {appointments.length} slot{appointments.length !== 1 ? "s" : ""}{" "}
-            {appointments.length !== 1 ? "available." : "left!"}
-          </Text>
-        </View>
+            <Text
+              className={`text-xl text-baccent font-semibold mb-2 text-center`}
+            >
+              {date}
+            </Text>
+            <Text
+              className={`text-emerald-500 text-2xl font-semibold text-center`}
+            >
+              {appointments.length} slot{appointments.length !== 1 ? "s" : ""}{" "}
+              {appointments.length !== 1 ? "available." : "left!"}
+            </Text>
+          </View>
+        </Animated.View>
 
         {/* may break but probably not this site sucks */}
         {Object.keys(groupedAppointments).some(
           (name) => name.includes("(") || name.includes("-"),
         ) && <View className={``}></View>}
 
-        {/* Render appts grouped by counselor */}
+        {/* Render appts grouped by counselor, fading in one by one */}
         {Object.entries(groupedAppointments).map(
-          ([counselorName, counselorAppointments]) => (
-            <View className="mb-4" key={counselorName}>
+          ([counselorName, counselorAppointments], groupIndex) => (
+            <Animated.View
+              key={counselorName}
+              entering={FadeIn.delay((groupIndex + 1) * 90).duration(300)}
+            >
               <View
-                className={`${isDark ? "bg-dark4" : "bg-light2"} rounded-2xl p-4 `}
+                className={`mb-4 ${isDark ? "bg-dark4" : "bg-light2"} rounded-2xl p-4 `}
               >
                 <View className="flex-row items-center justify-between mb-4">
                   <View className="flex-1 pr-3">
@@ -356,7 +364,7 @@ const AppointmentBooking: React.FC<AppointmentBookingProps> = ({
                   })}
                 </View>
               </View>
-            </View>
+            </Animated.View>
           ),
         )}
       </ScrollView>

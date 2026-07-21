@@ -182,7 +182,7 @@ const DetermineGrade = () => {
           <Text
             className={`text-center text-xl font-semibold ${isDark ? "text-appblack" : "text-appwhite"}`}
           >
-            {"Got it"}
+            Got it!
           </Text>
         </TouchableOpacity>
         {/* 

@@ -1,7 +1,7 @@
 ﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
-import { SecureStorage } from "../(auth)/taauth";
+import { SecureStorage } from "@/app/(auth)/taauth";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/AppText";
 // i got bored
@@ -35,7 +35,7 @@ function Messages() {
     "Have a good day, ",
   ];
 
-  let postMessage = ["!", "!", "!", "!!!!", "?", ".", ".", ".", ".", ".", "."];
+  let postMessage = ["!", "!", "!", "!!!! :3", "?", ".", ".", ".", ".", ".", "."];
 
   if (messageMode === "inspirational") {
     preMessage = [

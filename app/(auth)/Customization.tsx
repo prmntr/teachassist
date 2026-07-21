@@ -1,21 +1,11 @@
-﻿import * as Haptics from "expo-haptics";
-import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Modal,
-  Platform,
-  Text as RNText,
-  ScrollView,
-  TouchableOpacity,
-  useColorScheme,
-  View,
-} from "react-native";
-import { SecureStorage } from "../(auth)/taauth";
+﻿import { AlertIcon, AppAlert } from "@/components/ui/AppAlert";
+import Text from "@/components/ui/AppText";
+import AppToggle from "@/components/ui/AppToggle";
+import BackButton from "@/components/ui/Back";
 import LiquidGlassButton from "@/components/ui/LiquidGlassButton";
+import LiquidGlassView from "@/components/ui/LiquidGlassView";
+import PageBackground from "@/components/ui/PageBackground";
+import { useTheme } from "@/contexts/ThemeContext";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
 import {
   setLiquidGlassEnabled,
@@ -26,12 +16,22 @@ import {
   CUSTOM_THEME_IMAGE_STORAGE_KEY,
   FONT_PRESETS,
 } from "@/utils/themeSystem";
-import { useTheme } from "@/contexts/ThemeContext";
-import Text from "@/components/ui/AppText";
-import AppToggle from "@/components/ui/AppToggle";
-import BackButton from "@/components/ui/Back";
-import LiquidGlassView from "@/components/ui/LiquidGlassView";
-import PageBackground from "@/components/ui/PageBackground";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Modal,
+  Platform,
+  Text as RNText,
+  ScrollView,
+  TouchableOpacity,
+  useColorScheme,
+  View,
+} from "react-native";
+import { SecureStorage } from "../(auth)/taauth";
 
 const PersonalizationScreen = () => {
   const router = useRouter();
@@ -102,9 +102,10 @@ const PersonalizationScreen = () => {
       hapticsNotification(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
       console.warn("theme generation failed", error);
-      Alert.alert(
+      AppAlert.alert(
         "Theme Generation Failed",
         "Try a different image with stronger contrast and color.",
+        { icon: AlertIcon.error },
       );
     } finally {
       setIsBuildingCustomTheme(false);
@@ -180,7 +181,7 @@ const PersonalizationScreen = () => {
                   {
                     key: "dark",
                     label: "Dark",
-                    icon: require("../../assets/images/moon-fill.webp"),
+                    icon: require("../../assets/images/moon.png"),
                   },
                   {
                     key: "light",
@@ -206,8 +207,10 @@ const PersonalizationScreen = () => {
                       <View className="flex-row items-center justify-center px-3 py-2.5">
                         <Image
                           source={option.icon}
-                          className="mr-2 h-4 w-4"
+                          className="mr-2"
                           style={{
+                            width: 16,
+                            height: 17,
                             tintColor: isSelected
                               ? isDark
                                 ? "#2f3035"
@@ -311,7 +314,8 @@ const PersonalizationScreen = () => {
                       <View className="flex-row items-center px-3 py-2.5">
                         {[preset.light.accent, preset.dark.accent].map(
                           (color, idx) =>
-                            isSelected && idx === 1 ? null : (
+                            isSelected &&
+                            (isDark ? idx === 1 : idx === 0) ? null : (
                               <View
                                 key={`${preset.id}-${color}-${idx}`}
                                 className={`mr-1.5 h-2.5 rounded-full ${
@@ -443,14 +447,6 @@ const PersonalizationScreen = () => {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            shadowColor: "#000",
-            shadowOpacity: isDark ? 0.18 : 0.1,
-            shadowRadius: 10,
-            shadowOffset: {
-              width: 0,
-              height: 4,
-            },
-            elevation: 4,
           }}
           glassTintColor={activeTone.accent}
           fallbackBackgroundColor={activeTone.accent}
@@ -473,7 +469,8 @@ const PersonalizationScreen = () => {
       <Modal visible={showCustomThemeModal} transparent animationType="fade">
         <View className="flex-1 items-center justify-center bg-black/60 px-5">
           <LiquidGlassView
-            className="w-full rounded-2xl p-5"
+            containerClassName="w-full max-w-md"
+            className="rounded-2xl p-6"
             fallbackBackgroundColor={activeTone.bg3}
             glassTintColor={activeTone.bg2}
             glassEffectStyle="regular"
@@ -504,7 +501,7 @@ const PersonalizationScreen = () => {
                   <Image
                     className="h-5 w-5"
                     style={{
-                      tintColor: isDark ? "#edebea" : "#2f3035",
+                      tintColor: isDark ? "#2f3035" : "#edebea",
                     }}
                     source={require("../../assets/images/checkmark.png")}
                   />

@@ -21,14 +21,6 @@ const BackButton: React.FC<BackProps> = ({ path }) => {
         borderRadius: 999,
         alignItems: "center" as const,
         justifyContent: "center" as const,
-        shadowColor: "#000",
-        shadowOpacity: isDark ? 0.18 : 0.1,
-        shadowRadius: 8,
-        shadowOffset: {
-          width: 0,
-          height: 4,
-        },
-        elevation: 4,
       }
     : {
         borderRadius: 12,
@@ -36,14 +28,6 @@ const BackButton: React.FC<BackProps> = ({ path }) => {
         paddingVertical: 10,
         alignItems: "center" as const,
         justifyContent: "center" as const,
-        shadowColor: "#000",
-        shadowOpacity: isDark ? 0.18 : 0.1,
-        shadowRadius: 8,
-        shadowOffset: {
-          width: 0,
-          height: 4,
-        },
-        elevation: 4,
       };
 
   return (

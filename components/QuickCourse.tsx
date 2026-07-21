@@ -48,7 +48,7 @@ const getCurrentMark = (course: Course): string | null => {
 
 const getVisualMark = (mark: string | null, enabled: boolean) => {
   if (!mark || !enabled) return mark;
-  const numericMark = parseFloat(mark.replace("%", ""));
+  const numericMark = parseFloat(String(mark).replace("%", ""));
   if (isNaN(numericMark)) return mark;
   return "100";
 };
@@ -138,7 +138,7 @@ export const CourseInfoBox = ({
         >
           <View className="flex items-center mb-6">
             <Image
-              source={require("../../assets/images/cobweb-book.png")}
+              source={require("../assets/images/cobweb-book.png")}
               className="w-56 h-29 object-contain"
             ></Image>
           </View>
@@ -172,7 +172,7 @@ export const CourseInfoBox = ({
             <Text
               className={`${isDark ? "text-appblack" : "text-appwhite"} font-semibold text-center`}
             >
-              Got it
+              Got it!
             </Text>
           </TouchableOpacity>
         </LiquidGlassView>
@@ -214,8 +214,8 @@ export const CourseInfoBox = ({
           <ImageBackground
             source={
               isDark
-                ? require("../../assets/images/striped_bg.png")
-                : require("../../assets/images/striped_bg_white.png")
+                ? require("../assets/images/striped_bg.png")
+                : require("../assets/images/striped_bg_white.png")
             }
             style={{
               position: "absolute",
@@ -477,7 +477,7 @@ export const CourseInfoBox = ({
             )}
           </View>
 
-          <View className={`flex-row justify-end items-end flex-shrink-0`}>
+          <View className={`flex-row justify-end items-center flex-shrink-0`}>
             <View>
               {(() => {
                 const mark = parseFloat(displayCourse.courseMark);

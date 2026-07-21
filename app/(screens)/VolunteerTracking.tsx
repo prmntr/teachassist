@@ -3,7 +3,6 @@ import * as Haptics from "expo-haptics";
 import { Link } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   KeyboardAvoidingView,
   Linking,
@@ -14,10 +13,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import AnimatedProgressWheel from "react-native-progress-wheel";
 import { SecureStorage } from "../(auth)/taauth";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
 import { useLiquidGlassActive } from "@/utils/liquidGlass";
+import { notePositiveInteraction } from "@/utils/storeReview";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/AppText";
 import AppToggle from "@/components/ui/AppToggle";
@@ -77,6 +78,7 @@ const VolunteerTracking = () => {
     } else {
       // Add
       setVolunteerHours([data, ...volunteerHours]);
+      notePositiveInteraction();
     }
     setShowModal(false);
     setEditingIndex(null);
@@ -85,7 +87,7 @@ const VolunteerTracking = () => {
 
   // Delete handler
   const handleDelete = (index: number) => {
-    Alert.alert(
+    AppAlert.alert(
       "Delete Entry",
       "Are you sure you want to delete this volunteer hour entry?",
       [
@@ -101,6 +103,7 @@ const VolunteerTracking = () => {
           },
         },
       ],
+      { icon: AlertIcon.delete },
     );
   };
 
@@ -345,7 +348,7 @@ const VolunteerTracking = () => {
                   glassTintColor={activeTone.accent}
                   fallbackBackgroundColor={activeTone.accent}
                 >
-                  <Text className="text-white text-center font-medium">
+                  <Text className={`${isDark? "text-appblack" : "text-appwhite"} text-center font-medium`}>
                     {initialData ? "Save Changes" : "Add Hours"}
                   </Text>
                 </LiquidGlassButton>
@@ -449,14 +452,6 @@ const VolunteerTracking = () => {
           paddingVertical: liquidGlassEnabled ? 0 : 8,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#000",
-          shadowOpacity: isDark ? 0.18 : 0.1,
-          shadowRadius: 8,
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          elevation: 4,
         }}
         glassTintColor={activeTone.bg4}
         fallbackBackgroundColor={activeTone.bg4}
@@ -473,7 +468,7 @@ const VolunteerTracking = () => {
       </LiquidGlassButton>
       {/* Info Modal */}
       <Modal visible={showInfo} transparent animationType="fade">
-        <View className="flex-1 bg-black/50 items-center justify-center px-4">
+        <View className="flex-1 bg-black/50 items-center justify-center px-5">
           <LiquidGlassView
             containerClassName="w-full max-w-md"
             className={`${isDark ? "bg-dark3" : "bg-light3"} rounded-xl py-6 px-6`}
@@ -491,7 +486,7 @@ const VolunteerTracking = () => {
               <Text
                 className={`${isDark ? "text-appwhite" : "text-appblack"} text-xl font-bold`}
               >
-                Volunteer Tracking
+                Volunteer Hours
               </Text>
             </View>
             <Text
@@ -687,7 +682,11 @@ const VolunteerTracking = () => {
       />
       <ScrollView
         className={`mt-5 mb-7 rounded-xl ${volunteerHours.length === 0 ? (isDark ? "bg-dark3" : "bg-light3") : ""}`}
-        contentContainerStyle={volunteerHours.length === 0 ? { flexGrow: 1, justifyContent: "center" } : undefined}
+        contentContainerStyle={
+          volunteerHours.length === 0
+            ? { flexGrow: 1, justifyContent: "center" }
+            : undefined
+        }
       >
         {volunteerHours.length === 0 ? (
           <View className={`items-center px-8 py-8`}>
@@ -779,7 +778,7 @@ const VolunteerTracking = () => {
                 >
                   <Image
                     className="w-4 h-4"
-                    style={{ tintColor: "#ffffff" }}
+                    style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
                     source={require("../../assets/images/trash-bin.png")}
                   />
                   <Text

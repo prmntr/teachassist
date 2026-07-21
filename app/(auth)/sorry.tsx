@@ -27,12 +27,16 @@ const Sorry = () => {
 
         <Link
           href="/"
-          className={`text-white font-semibold text-3xl bg-baccent/80 px-5 py-3 rounded-xl mt-10`}
+          className={`${isDark ? "text-appblack" : "text-appwhite"} font-semibold text-xl bg-baccent/80 px-5 py-3 rounded-xl mt-10`}
           onPress={() => {
             hapticsImpact(Haptics.ImpactFeedbackStyle.Rigid);
           }}
         >
-          Go Back
+          <Text
+            className={`${isDark ? "text-appblack" : "text-appwhite"} text-xl text-center mx-5`}
+          >
+            Go back
+          </Text>
         </Link>
       </View>
     </View>

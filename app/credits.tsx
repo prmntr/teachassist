@@ -157,7 +157,7 @@ const Guidance = () => {
         <Text
           className={`${isDark ? "text-appgraydark" : "text-appgraylight"} my-2 mb-3 mt-5 font-semibold leading-relaxed`}
         >
-          ROLLLL WARRIORSSSS
+          ;3
         </Text>
 
         {/* 

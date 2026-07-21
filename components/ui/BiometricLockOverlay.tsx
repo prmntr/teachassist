@@ -1,7 +1,8 @@
 import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Alert, AppState, Image, View } from "react-native";
+import { AppState, Image, View } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import Text from "./AppText";
 import LiquidGlassButton from "./LiquidGlassButton";
 import {
@@ -46,9 +47,10 @@ export function BiometricLockOverlay() {
           result.error === "not_available" ||
           result.error === "not_enrolled"
         ) {
-          Alert.alert(
+          AppAlert.alert(
             "Biometrics Unavailable",
             "Set up Face ID, Touch ID, or a fingerprint to use app lock.",
+            { icon: AlertIcon.lock },
           );
           await persistBiometricLockEnabled(false);
           setBiometricLockEnabledState(false);
@@ -143,7 +145,7 @@ export function BiometricLockOverlay() {
         <Text
           className={`text-xl font-bold mb-2 mt-6 text-center ${isDark ? "text-appwhite" : "text-appblack"}`}
         >
-          TeachAssist has been logcked.
+          TeachAssist has been locked.
         </Text>
         <Text
           className={`text-sm mb-4 ${isDark ? "text-appwhite" : "text-appblack"}/60`}

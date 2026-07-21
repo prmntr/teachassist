@@ -172,7 +172,6 @@ const JavaScriptTabLayout = () => {
         },
       }}
       screenOptions={{
-        animation: 'fade',
         tabBarShowLabel: false,
         tabBarItemStyle: {
           width: "100%",

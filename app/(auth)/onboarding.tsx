@@ -71,9 +71,7 @@ const Onboarding = () => {
                 glassTintColor={activeTone.bg2}
                 glassEffectStyle="regular"
               >
-                <View
-                  className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-baccent/70"
-                >
+                <View className="mr-4 h-12 w-12 items-center justify-center rounded-full bg-baccent/70">
                   <Image
                     source={item.icon}
                     className={`w-7 h-7`}
@@ -106,14 +104,6 @@ const Onboarding = () => {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "center",
-            shadowColor: "#000",
-            shadowOpacity: isDark ? 0.18 : 0.1,
-            shadowRadius: 10,
-            shadowOffset: {
-              width: 0,
-              height: 4,
-            },
-            elevation: 4,
           }}
           glassTintColor={activeTone.accent}
           fallbackBackgroundColor={activeTone.accent}

@@ -71,7 +71,7 @@ const Onboarding = () => {
             <Text
               className={`${isDark ? "text-appblack" : "text-appwhite"} font-semibold text-3xl mr-2`}
             >
-              Got it
+              Got it!
             </Text>
             <Image
               className={`w-8 h-8`}

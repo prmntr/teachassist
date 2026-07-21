@@ -83,17 +83,6 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
           "View teacher qualifications, certificates, degrees, and more.",
       },
       {
-        type: "new",
-        title: "Virtual ID",
-        description: "Store your student ID securely on your phone.",
-      },
-      {
-        type: "new",
-        title: "Liquid Glass",
-        description:
-          "Experience liquid glass on compatible iOS and iPadOS devices; now in testing.",
-      },
-      {
         type: "improved",
         title: "App Design Cleanup",
         description: "Improved the design of various aspects of the app.",
@@ -259,7 +248,7 @@ const UpdatesModal: React.FC<UpdatesModalProps> = ({
               <Text
                 className={`${isDark ? "text-appblack" : "text-appwhite"} text-xl font-semibold`}
               >
-                Got it
+                Got it!
               </Text>
             </TouchableOpacity>
           </View>

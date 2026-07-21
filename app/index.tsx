@@ -5,18 +5,19 @@ import { VideoView, useVideoPlayer } from "expo-video";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Image,
   StyleSheet,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import TeachAssistAuthFetcher, { SecureStorage } from "./(auth)/taauth";
 import Text from "@/components/ui/AppText";
 import LiquidGlassButton from "@/components/ui/LiquidGlassButton";
 import LiquidGlassView from "@/components/ui/LiquidGlassView";
 import PageBackground from "@/components/ui/PageBackground";
 import { appVersionNumber } from "@/utils/appVersion";
+import { primeCoursesMemoryCache } from "@/utils/coursesMemoryCache";
 import { hapticsImpact } from "@/utils/haptics";
 import { consumeStudentGradeStartupPrompt } from "@/utils/notifications";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -58,9 +59,14 @@ const InitialRoute = () => {
   useEffect(() => {
     const checkSavedCredentialsOrCourses = async () => {
       try {
-        const savedUsername = await SecureStorage.load("ta_username");
-        const savedPassword = await SecureStorage.load("ta_password");
-        const savedCourses = await SecureStorage.load("ta_courses");
+        const [savedUsername, savedPassword, savedCourses] = await Promise.all([
+          SecureStorage.load("ta_username"),
+          SecureStorage.load("ta_password"),
+          SecureStorage.load("ta_courses"),
+        ]);
+        // Warm the in-memory mirror so the courses tab and course views render
+        // without waiting on their own keychain reads.
+        primeCoursesMemoryCache(savedCourses);
         // Immediately show courses page if cached courses exist
         if (savedCourses) {
           const shouldShowStudentGradePage =
@@ -84,8 +90,10 @@ const InitialRoute = () => {
         }
       } catch (error) {
         // error getting auth
-        Alert.alert(
+        AppAlert.alert(
           "There was an error logging you back in. Please log in again.",
+          undefined,
+          { icon: AlertIcon.error },
         );
         console.warn("index: failed to load saved credentials", error);
         setIsCheckingAuth(false);
@@ -171,15 +179,6 @@ const InitialRoute = () => {
           pointerEvents="none"
           nativeControls={false}
         />
-        <LinearGradient
-          colors={
-            isDark
-              ? ["rgba(8, 10, 14, 0.15)", "rgba(8, 10, 14, 0.95)"]
-              : ["rgba(245, 247, 250, 0.2)", "rgba(245, 247, 250, 0.95)"]
-          }
-          style={StyleSheet.absoluteFillObject}
-          pointerEvents="none"
-        />
         <LiquidGlassView
           containerStyle={{ width: "100%", paddingHorizontal: 24 }}
           contentStyle={{
@@ -188,9 +187,6 @@ const InitialRoute = () => {
             paddingVertical: 32,
             alignItems: "center",
           }}
-          fallbackBackgroundColor={activeTone.bg3}
-          glassTintColor={activeTone.bg2}
-          glassEffectStyle="regular"
         >
           <Image
             source={
@@ -290,14 +286,6 @@ const InitialRoute = () => {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
-              shadowColor: "#000",
-              shadowOpacity: isDark ? 0.18 : 0.1,
-              shadowRadius: 10,
-              shadowOffset: {
-                width: 0,
-                height: 4,
-              },
-              elevation: 4,
             }}
             glassTintColor={activeTone.accent}
             fallbackBackgroundColor={activeTone.accent}

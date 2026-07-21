@@ -22,7 +22,8 @@
         "backgroundColor": "#161616"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.prmntr.teachassist"
+      "package": "com.prmntr.teachassist",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.prmntr.teachassist"
     },
     "notification": {
       "icon": "./assets/images/teach-icon-transparent.png",

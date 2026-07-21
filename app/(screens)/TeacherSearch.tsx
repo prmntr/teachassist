@@ -4,13 +4,13 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Modal,
   ScrollView,
   TouchableOpacity,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
 import { useLiquidGlassActive } from "@/utils/liquidGlass";
 import {
@@ -138,9 +138,10 @@ const TeacherSearch = () => {
     } catch (error) {
       console.warn("teacher search failed", error);
       await hapticsNotification(Haptics.NotificationFeedbackType.Error);
-      Alert.alert(
+      AppAlert.alert(
         "Teacher Search Failed",
         "Check your connection, restart the dev server if you just added .env values, then try a more specific name.",
+        { icon: AlertIcon.error },
       );
     } finally {
       setLoadingSearch(false);
@@ -237,14 +238,6 @@ const TeacherSearch = () => {
           paddingVertical: liquidGlassEnabled ? 0 : 8,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#000",
-          shadowOpacity: isDark ? 0.18 : 0.1,
-          shadowRadius: 8,
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          elevation: 4,
         }}
         glassTintColor={activeTone.bg4}
         fallbackBackgroundColor={activeTone.bg4}

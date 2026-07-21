@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { parseStudentGrades } from "@/utils/CourseParser";
 import { parseGradeData } from "@/utils/GradeParser";
 import { mergeCoursesWithCache, resolveReportUrl } from "@/utils/courseCache";
+import { primeCoursesMemoryCache } from "@/utils/coursesMemoryCache";
 import { notifyCourseStorageUpdated } from "@/utils/courseStorageEvents";
 import { saveParsedCourseReport } from "@/utils/courseReportCache";
 import {
@@ -38,13 +39,15 @@ const buildDemoGuidanceHtml = (date: Date): string => {
   const dateString = formatDateForGuidance(date);
   const demoSlotsA = ["09:00:00", "10:30:00", "13:15:00", "15:00:00"];
   const demoSlotsB = ["09:45:00", "11:00:00", "14:00:00", "15:30:00"];
-  const buildLinks = (slots: string[], startId: number) =>
+  // Ids must be unique per date+counselor+time — they're used as the
+  // AppointmentData id (React list keys, cancel targets). A plain
+  // slot-index id collides across different counselors/dates, which used
+  // to make "My Appointments" silently drop or mis-cancel bookings.
+  const buildLinks = (slots: string[], counselorKey: string) =>
     slots
       .map(
-        (time, index) =>
-          `<a href="bookAppointment.php?dt=${dateString}&tm=${time}&id=${
-            startId + index
-          }&school_id=0">@ ${time}</a>`
+        (time) =>
+          `<a href="bookAppointment.php?dt=${dateString}&tm=${time}&id=${dateString}-${counselorKey}-${time.replace(/:/g, "")}&school_id=0">@ ${time}</a>`
       )
       .join("");
 
@@ -53,16 +56,16 @@ const buildDemoGuidanceHtml = (date: Date): string => {
   <body>
     <h2>Appointment Bookings on ${dateString}</h2>
     <div class="box">
-      <h3>Xidan Aue: Guidance (6-7)</h3>
-      ${buildLinks(demoSlotsA, 1000)}
+      <h3>T. Pearl: Guidance (A-C)</h3>
+      ${buildLinks(demoSlotsA, "pearl")}
     </div>
     <div class="box">
-      <h3>E. Tran: Guidance (4-1)</h3>
-      ${buildLinks(demoSlotsB, 2000)}
+      <h3>E. Stin: Guidance (D-K)</h3>
+      ${buildLinks(demoSlotsB, "stin")}
     </div>
      <div class="box">
-      <h3>K. Cwan: Guidance (say-wallahi)</h3>
-      ${buildLinks(demoSlotsB, 2000)}
+      <h3>K. Cwan: Guidance (L-Z)</h3>
+      ${buildLinks(demoSlotsB, "cwan")}
     </div>
   </body>
 </html>`;
@@ -640,7 +643,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       username: string,
       password: string,
       shouldPrefetch: boolean
-    ): Promise<{ success: boolean; error?: string }> => {
+    ): Promise<{ success: boolean; error?: string; html?: string }> => {
       const encodedUsername = encodeURIComponent(username);
       const encodedPassword = encodeURIComponent(password);
 
@@ -651,65 +654,86 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         await SecureStorage.save("ta_is_demo", "true");
         await SecureStorage.save("ta_student_id", "");
         await SecureStorage.save("ta_session_token", "");
-        const demoCoursesJson = `[
-  {
-    "courseCode": "AMI1O1",
-    "courseName": "Instrumental Music - Band",
-    "block": "1",
-    "room": "41",
-    "startDate": "2025-09-02",
-    "semester": 2,
-    "endDate": "2026-01-29",
-    "grade": "89.6",
-    "hasGrade": true
-  },
-  {
-    "courseCode": "CGC1D1",
-    "courseName": "Issues In Canadian Geography",
-    "block": "2",
-    "room": "167",
-    "startDate": "2025-09-02",
-    "semester": 2,
-    "endDate": "2026-01-29",
-    "grade": "92.1",
-    "hasGrade": true
-
-  },
-  {
-    "courseCode": "LUNCH",
-    "courseName": "Lunch",
-    "block": "3",
-    "room": "CAFE",
-    "startDate": "2025-09-02",
-    "semester": 2,
-    "endDate": "2026-01-29",
-    "hasGrade": false
-  },
-  {
-    "courseCode": "ICD2fO1",
-    "courseName": "Digital Technology",
-    "block": "4",
-    "room": "114",
-    "startDate": "2025-09-02",
-    "semester": 2,
-    "endDate": "2026-01-29",
-    "grade": "80",
-    "hasGrade": true
-  },
-  {
-    "courseCode": "BBI2O1",
-    "courseName": "Introduction to Business",
-    "block": "5",
-    "room": "137",
-    "startDate": "2025-09-02",
-    "semester": 2,
-    "endDate": "2026-01-29",
-    "grade": "92",
-    "hasGrade": true
-  }
-]
-        `;
+        // Center demo course dates on "now" so the active-semester scoping in
+        // GradeAverage always includes them (otherwise the average reads N/A
+        // out of term). subjectId values make the demo courses tappable and
+        // route to the static demo report. Feb–Jul presents as semester 2.
+        const demoNow = new Date();
+        const padDatePart = (value: number) => String(value).padStart(2, "0");
+        const formatDemoDate = (date: Date) =>
+          `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+        const demoStart = new Date(demoNow);
+        demoStart.setMonth(demoStart.getMonth() - 3);
+        const demoEnd = new Date(demoNow);
+        demoEnd.setMonth(demoEnd.getMonth() + 3);
+        const demoStartDate = formatDemoDate(demoStart);
+        const demoEndDate = formatDemoDate(demoEnd);
+        const demoSemester =
+          demoNow.getMonth() >= 1 && demoNow.getMonth() <= 6 ? 2 : 1;
+        const demoCoursesJson = JSON.stringify([
+          {
+            courseCode: "AMI1O1",
+            courseName: "Instrumental Music - Band",
+            block: "1",
+            room: "41",
+            startDate: demoStartDate,
+            semester: demoSemester,
+            endDate: demoEndDate,
+            grade: "89.6",
+            hasGrade: true,
+            subjectId: "900001",
+            midtermMark: "55",
+            finalMark: "99",
+          },
+          {
+            courseCode: "CGC1D1",
+            courseName: "Issues In Canadian Geography",
+            block: "2",
+            room: "167",
+            startDate: demoStartDate,
+            semester: demoSemester,
+            endDate: demoEndDate,
+            grade: "92.1",
+            hasGrade: true,
+            subjectId: "900002",
+          },
+          {
+            courseCode: "LUNCH",
+            courseName: "Lunch",
+            block: "3",
+            room: "CAFE",
+            startDate: demoStartDate,
+            semester: demoSemester,
+            endDate: demoEndDate,
+            hasGrade: false,
+          },
+          {
+            courseCode: "ICD2O1",
+            courseName: "Digital Technology",
+            block: "4",
+            room: "114",
+            startDate: demoStartDate,
+            semester: demoSemester,
+            endDate: demoEndDate,
+            grade: "80",
+            hasGrade: true,
+            subjectId: "900003",
+          },
+          {
+            courseCode: "BBI2O1",
+            courseName: "Introduction to Business",
+            block: "5",
+            room: "137",
+            startDate: demoStartDate,
+            semester: demoSemester,
+            endDate: demoEndDate,
+            grade: "92",
+            hasGrade: true,
+            subjectId: "900004",
+          },
+        ]);
         await SecureStorage.save("ta_courses", demoCoursesJson);
+        primeCoursesMemoryCache(demoCoursesJson);
         await syncStoredStudentGrade(demoCoursesJson);
         await saveMarksLastRetrievedNow("loginAndStore demo account");
         await SecureStorage.save("school_id", "0");
@@ -766,6 +790,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       await SecureStorage.save("ta_password", password);
       await SecureStorage.save("ta_is_demo", "false");
       await SecureStorage.save("ta_courses", mergedCoursesJson);
+      primeCoursesMemoryCache(mergedCoursesJson);
       await syncStoredStudentGrade(mergedCoursesJson);
       await SecureStorage.save("school_id", schoolId);
       await fetchSchoolName(schoolId);
@@ -776,7 +801,9 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
       await saveMarksLastRetrievedNow("loginAndStore standard account");
       await saveLastAuthTime();
 
-      return { success: true };
+      // The login response is the index page itself; callers fetching the
+      // index can reuse it instead of a second round trip.
+      return { success: true, html };
     };
 
     const fetchHtmlWithAutoReauth = async (
@@ -850,7 +877,32 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
         }
 
         if (fetchWithCookies) {
-          const { html } = await fetchHtmlWithAutoReauth(await getIndexUrl());
+          let { html } = await fetchHtmlWithCookies(await getIndexUrl());
+          // Tracks whether an in-line re-login already parsed, merged, saved and
+          // notified — repeating that work here caused a visible second refresh.
+          let reauthHandledStorage = false;
+
+          if (html.toLowerCase().includes("log in")) {
+            const savedUsername = await SecureStorage.load("ta_username");
+            const savedPassword = await SecureStorage.load("ta_password");
+            if (savedUsername && savedPassword) {
+              const reauth = await loginAndStore(
+                savedUsername,
+                savedPassword,
+                Boolean(prefetchCourses)
+              );
+              if (reauth.success) {
+                reauthHandledStorage = true;
+                if (reauth.html) {
+                  html = reauth.html;
+                } else {
+                  // Demo login has no portal HTML; storage is already populated.
+                  safeOnResult("Login Success");
+                  return;
+                }
+              }
+            }
+          }
 
           if (html.toLowerCase().includes("log in")) {
             safeOnResult("Login Failed: Session expired or invalid cookies.");
@@ -858,6 +910,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
           }
 
           if (
+            !reauthHandledStorage &&
             prefetchCourses &&
             html.toLowerCase().includes("student reports")
           ) {
@@ -881,6 +934,7 @@ const TeachAssistAuthFetcher: React.FC<TeachAssistAuthFetcherProps> = ({
               }
 
               await SecureStorage.save("ta_courses", mergedCoursesJson);
+              primeCoursesMemoryCache(mergedCoursesJson);
               await syncStoredStudentGrade(mergedCoursesJson);
 
               const schoolIdFromHtml = html.match(/school_id=(\d+)/)?.[1];

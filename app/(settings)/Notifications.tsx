@@ -2,7 +2,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   Modal,
   Platform,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import { hapticsImpact } from "@/utils/haptics";
 import AppToggle from "@/components/ui/AppToggle";
 import {
@@ -54,9 +54,10 @@ const NotificationsScreen = () => {
     await hapticsImpact(Haptics.ImpactFeedbackStyle.Light);
     const granted = await ensureNotificationPermissions();
     if (!granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Notifications Disabled",
         "Enable notifications in system settings to receive guidance reminders.",
+        { icon: AlertIcon.notification },
       );
       return;
     }
@@ -75,9 +76,10 @@ const NotificationsScreen = () => {
     await hapticsImpact(Haptics.ImpactFeedbackStyle.Light);
     const granted = await ensureNotificationPermissions();
     if (!granted) {
-      Alert.alert(
+      AppAlert.alert(
         "Notifications Disabled",
         "Enable notifications in system settings to receive mark alerts.",
+        { icon: AlertIcon.notification },
       );
       return;
     }
@@ -172,7 +174,7 @@ const NotificationsScreen = () => {
                       <Image
                         className="w-4 h-4"
                         tintColor="#fbfbfb"
-                        source={require("../../../assets/images/question-sign.png")}
+                        source={require("../../assets/images/question-sign.png")}
                       />
                     </View>
                   </TouchableOpacity>
@@ -251,7 +253,7 @@ const NotificationsScreen = () => {
                       <Image
                         className="w-4 h-4"
                         tintColor="#fbfbfb"
-                        source={require("../../../assets/images/question-sign.png")}
+                        source={require("../../assets/images/question-sign.png")}
                       />
                     </View>
                   </TouchableOpacity>
@@ -306,14 +308,15 @@ const NotificationsScreen = () => {
       <Modal visible={showTestingInfo} transparent animationType="fade">
         <View className="flex-1 items-center justify-center bg-black/60 px-5">
           <LiquidGlassView
-            className="w-full rounded-2xl p-5 max-w-md"
+            containerClassName="w-full max-w-md"
+            className="rounded-2xl p-5"
             fallbackBackgroundColor={activeTone.bg3}
             glassTintColor={activeTone.bg2}
             glassEffectStyle="regular"
           >
             <View className="flex items-center mb-6">
               <Image
-                source={require("../../../assets/images/betta-fish.png")}
+                source={require("../../assets/images/betta-fish.png")}
                 className="w-30 h-30 object-contain"
               />
             </View>
@@ -333,8 +336,7 @@ const NotificationsScreen = () => {
               className={`${isDark ? "text-appgraylight" : "text-appgraydark"} mb-4`}
             >
               Notifications work by contacting the TeachAssist servers and
-              checking for grade updates every 15-20 minutes. This feature being
-              tested.
+              checking for grade updates every 15-20 minutes. This feature is in testing.
               {"\n\n"}
               <Text className="font-semibold text-baccent">
                 Note: Notifications may fail to run with an active VPN to a

@@ -146,8 +146,7 @@ const Error = () => {
           <Text
             className={`${isDark ? "text-appwhite" : "text-appblack"} text-xs text-center`}
           >
-            Error occurred at {new Date().toLocaleTimeString()} {`\n`}{" "}
-            COURSE_NOT_FOUND {/*lol*/}
+            Error happened at {new Date().toLocaleTimeString()} {`\n`}{" "}
           </Text>
         </View>
       </ScrollView>

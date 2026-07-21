@@ -2,16 +2,16 @@
 import NetInfo from "@react-native-community/netinfo";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   Platform,
   ScrollView,
   useWindowDimensions,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import TeachAssistAuthFetcher, { AppointmentFormData } from "../(auth)/taauth";
 import AppointmentBooking, {
@@ -31,7 +31,23 @@ import {
   normalizeSchoolPickerDate,
   SCHOOL_TIME_ZONE,
 } from "@/utils/schoolTime";
+import { notePositiveInteraction } from "@/utils/storeReview";
 import { useTheme } from "@/contexts/ThemeContext";
+
+const HEADER_ACTION_BUTTON_SIZE = 48;
+const HEADER_ACTION_ICON_SIZE = 25;
+
+// Check if the result is an appointment form. Pure function of its input,
+// hoisted out of the component so it has a stable identity — it's used
+// inside useCallback'd handlers below and mustn't force them to change
+// identity on every render.
+const isAppointmentForm = (html: string): boolean => {
+  return (
+    html.includes('name="reason"') &&
+    html.includes('type="radio"') &&
+    html.includes("Submit Reason")
+  );
+};
 
 const Guidance = () => {
   const { activeTone, isDark } = useTheme();
@@ -40,12 +56,13 @@ const Guidance = () => {
   const nativeTabsEnabled = useNativeTabsEnabled();
   const isIOS = Platform.OS === "ios";
   const isLandscape = width > height;
+  const headerTopMargin = isIOS ? 56 : 59;
   const isCompactLandscape = isLandscape && Math.min(width, height) < 600;
   const nativeTabBottomPadding = nativeTabsEnabled
     ? isLandscape
       ? 0
-      : insets.bottom + 52
-    : 0;
+      : insets.bottom + 60
+    : 8;
   const [selectedDate, setSelectedDate] = useState(() =>
     getTodayInSchoolTimeZone(),
   );
@@ -55,7 +72,6 @@ const Guidance = () => {
   const [error, setError] = useState<string | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [bookingUrl, setBookingUrl] = useState<string | null>(null);
-  const [bookingResult, setBookingResult] = useState<string | null>(null);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
   const [appointmentFormHtml, setAppointmentFormHtml] = useState<string>("");
 
@@ -90,22 +106,27 @@ const Guidance = () => {
     }
   };
 
-  const checkGuidanceAvailability = async () => {
+  // Memoized so TeachAssistAuthFetcher's effect (which depends on
+  // onResult/onError) doesn't see a new function identity on every
+  // Guidance re-render and re-fire an in-flight booking request — that
+  // race was silently duplicating/losing appointment writes.
+  const checkGuidanceAvailability = useCallback(async () => {
     const netInfo = await NetInfo.fetch();
 
     if (!netInfo.isConnected) {
       setError(
         "No internet connection. Please check your connection and try again.",
       );
+      setIsLoading(false);
       return;
     }
     setError(null);
     setGuidanceResult(null);
     setShowAppointmentForm(false);
     setShowFetcher(true);
-  };
+  }, []);
 
-  const handleGuidanceResult = (result: string) => {
+  const handleGuidanceResult = useCallback((result: string) => {
     // Handle re-authentication success - retry the guidance check
     if (result.includes("REAUTH SUCCESS")) {
       // Don't set showFetcher to false, keep it true to retry
@@ -114,22 +135,13 @@ const Guidance = () => {
 
     setGuidanceResult(result);
     setShowFetcher(false);
-  };
+  }, []);
 
-  const handleError = (error: string) => {
+  const handleError = useCallback((error: string) => {
     console.error("Guidance error:", error);
     setError(error);
     setShowFetcher(false);
-  };
-
-  // Check if the result is an appointment form
-  const isAppointmentForm = (html: string): boolean => {
-    return (
-      html.includes('name="reason"') &&
-      html.includes('type="radio"') &&
-      html.includes("Submit Reason")
-    );
-  };
+  }, []);
 
   // handle appointment booking using taauth
   const handleAppointmentPress = (appointment: AppointmentSlot) => {
@@ -141,67 +153,70 @@ const Guidance = () => {
     setShowAppointmentForm(false);
   };
 
-  const handleBookingResult = (result: string) => {
-    // Handle re-authentication success - retry the booking
-    if (result === "REAUTH SUCCESS") {
-      // Don't clear bookingUrl, keep the booking request active to retry
-      return;
-    }
+  const handleBookingResult = useCallback(
+    (result: string) => {
+      // Handle re-authentication success - retry the booking
+      if (result === "REAUTH SUCCESS") {
+        // Don't clear bookingUrl, keep the booking request active to retry
+        return;
+      }
 
-    // Check if the result is a form that needs to be filled
-    if (isAppointmentForm(result)) {
-      setAppointmentFormHtml(result);
-      setShowAppointmentForm(true);
+      // Check if the result is a form that needs to be filled
+      if (isAppointmentForm(result)) {
+        setAppointmentFormHtml(result);
+        setShowAppointmentForm(true);
+        setBookingUrl(null);
+        setIsLoading(false);
+        return;
+      }
+
+      // Handle final booking result
+      if (result.includes("successfully")) {
+        AppAlert.alert(
+          "Appointment Successful",
+          `You have been booked for a guidance appointment on ${formatSchoolDate(
+            selectedDate,
+            "en-GB",
+            {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            },
+          )}.`,
+          { icon: AlertIcon.calendar },
+        );
+        // Refresh the guidance data to show updated availability. Loading
+        // is deliberately left on here — clearing it would flash the (now
+        // stale) slot list for a moment before this refresh replaces it,
+        // which reads as the screen refreshing twice.
+        setTimeout(() => {
+          checkGuidanceAvailability();
+        }, 1000);
+        notePositiveInteraction();
+      } else {
+        AppAlert.alert("Booking Failed", result, { icon: AlertIcon.error });
+        setIsLoading(false);
+      }
+
       setBookingUrl(null);
-      setIsLoading(false);
-      return;
-    }
+      setShowAppointmentForm(false);
+      setPendingAppointmentMeta(null);
+    },
+    [selectedDate, checkGuidanceAvailability],
+  );
 
-    // Handle final booking result
-    if (result.includes("successfully")) {
-      Alert.alert(
-        "Appointment Successful",
-        `You have been booked for a guidance appointment on ${formatSchoolDate(
-          selectedDate,
-          "en-GB",
-          {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          },
-        )}.`,
-      );
-      // Refresh the guidance data to show updated availability
-      setTimeout(() => {
-        checkGuidanceAvailability();
-      }, 1000);
-    }
-
-    setBookingResult(result);
-    setBookingUrl(null);
-    setIsLoading(false);
-    setShowAppointmentForm(false);
-    setPendingAppointmentMeta(null);
-
-    // Clear booking result after 3 seconds
-    setTimeout(() => {
-      setBookingResult(null);
-    }, 3000);
-  };
-
-  const handleBookingError = (error: string) => {
+  const handleBookingError = useCallback((error: string) => {
     console.error("Booking error:", error);
-    setBookingResult(`Booking error: ${error}`);
+    AppAlert.alert(
+      "Booking Failed",
+      error || "An error occurred while booking the appointment.",
+      { icon: AlertIcon.error },
+    );
     setBookingUrl(null);
     setIsLoading(false);
     setShowAppointmentForm(false);
     setPendingAppointmentMeta(null);
-
-    // Clear booking result after 3 seconds
-    setTimeout(() => {
-      setBookingResult(null);
-    }, 3000);
-  };
+  }, []);
 
   // Handle form submission
   const handleFormSubmit = (formData: AppointmentFormData) => {
@@ -218,65 +233,65 @@ const Guidance = () => {
   const handleFormCancel = () => {
     setShowAppointmentForm(false);
     setAppointmentFormHtml("");
-    setBookingResult("Appointment booking cancelled.");
     setPendingAppointmentMeta(null);
-
-    // Clear result after 2 seconds
-    setTimeout(() => {
-      setBookingResult(null);
-    }, 2000);
+    AppAlert.alert("Booking Cancelled", "Appointment booking cancelled.", {
+      icon: AlertIcon.error,
+    });
   };
 
   // Handle form submission result
-  const handleFormSubmissionResult = (result: string) => {
-    // Handle re-authentication success - retry the form submission
-    if (result === "REAUTH SUCCESS") {
-      // Don't clear formSubmissionData, keep the form submission request active to retry
-      return;
-    }
+  const handleFormSubmissionResult = useCallback(
+    (result: string) => {
+      // Handle re-authentication success - retry the form submission
+      if (result === "REAUTH SUCCESS") {
+        // Don't clear formSubmissionData, keep the form submission request active to retry
+        return;
+      }
 
-    if (result.includes("successfully")) {
-      Alert.alert(
-        "Appointment Successful",
-        `Your guidance appointment has been booked for ${formatSchoolDate(
-          selectedDate,
-          "en-GB",
-          {
-            day: "2-digit",
-            month: "2-digit",
-            year: "numeric",
-          },
-        )}.`,
-      );
-      // Refresh the guidance data to show updated availability
-      setTimeout(() => {
-        checkGuidanceAvailability();
-      }, 1000);
-    }
+      if (result.includes("successfully")) {
+        AppAlert.alert(
+          "Appointment Successful",
+          `Your guidance appointment has been booked for ${formatSchoolDate(
+            selectedDate,
+            "en-GB",
+            {
+              day: "2-digit",
+              month: "2-digit",
+              year: "numeric",
+            },
+          )}.`,
+          { icon: AlertIcon.calendar },
+        );
+        // Refresh the guidance data to show updated availability. Loading
+        // is deliberately left on here — clearing it would flash the (now
+        // stale) slot list for a moment before this refresh replaces it,
+        // which reads as the screen refreshing twice.
+        setTimeout(() => {
+          checkGuidanceAvailability();
+        }, 1000);
+        notePositiveInteraction();
+      } else {
+        AppAlert.alert("Booking Failed", result, { icon: AlertIcon.error });
+        setIsLoading(false);
+      }
 
-    setBookingResult(result);
-    setFormSubmissionData(null);
-    setIsLoading(false);
-    setPendingAppointmentMeta(null);
+      setFormSubmissionData(null);
+      setPendingAppointmentMeta(null);
+    },
+    [selectedDate, checkGuidanceAvailability],
+  );
 
-    // Clear booking result after 3 seconds
-    setTimeout(() => {
-      setBookingResult(null);
-    }, 3000);
-  };
-
-  const handleFormSubmissionError = (error: string) => {
+  const handleFormSubmissionError = useCallback((error: string) => {
     console.error("Form submission error:", error);
-    setBookingResult(`Form submission error: ${error}`);
+    AppAlert.alert(
+      "Booking Failed",
+      error || "An error occurred while submitting the appointment request.",
+      { icon: AlertIcon.error },
+    );
     setFormSubmissionData(null);
     setIsLoading(false);
     setPendingAppointmentMeta(null);
-
-    // Clear booking result after 3 seconds
-    setTimeout(() => {
-      setBookingResult(null);
-    }, 3000);
-  };
+  }, []);
 
   const renderDateChooser = () => {
     const content = (
@@ -302,6 +317,8 @@ const Guidance = () => {
               onChange={handleDateChange}
               minimumDate={minimumGuidanceDate}
               timeZoneName={SCHOOL_TIME_ZONE}
+              accentColor={activeTone.accent}
+              textColor={isDark ? "#edebea" : "#2f3035"}
             />
           ) : (
             showDatePicker && (
@@ -312,6 +329,7 @@ const Guidance = () => {
                 onChange={handleDateChange}
                 minimumDate={minimumGuidanceDate}
                 timeZoneName={SCHOOL_TIME_ZONE}
+                accentColor={activeTone.accent}
               />
             )
           )}
@@ -363,7 +381,6 @@ const Guidance = () => {
               paddingVertical: 8,
               alignItems: "center",
               justifyContent: "center",
-              elevation: 4,
             }}
             glassTintColor={activeTone.accent}
             fallbackBackgroundColor={activeTone.accent}
@@ -490,54 +507,6 @@ const Guidance = () => {
               })}
             </Text>
             <ActivityIndicator color={activeTone.accent} size="large" />
-          </ScrollView>
-        </LiquidGlassView>
-      );
-    }
-
-    if (bookingResult) {
-      return (
-        <LiquidGlassView
-          containerClassName="flex-1"
-          className="rounded-xl mb-4  w-full overflow-hidden"
-          fallbackBackgroundColor={activeTone.bg3}
-          glassTintColor={activeTone.bg2}
-          glassEffectStyle="clear"
-        >
-          <ScrollView
-            className="w-full h-full"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{
-              padding: 24,
-              flexGrow: 1,
-              justifyContent: "center",
-              alignItems: "center",
-            }}
-          >
-            <View className="flex items-center">
-              {bookingResult.includes("cancelled") ? (
-                <Image
-                  source={require("../../assets/images/caution.png")}
-                  className={` w-20 h-20 my-3 mb-5`}
-                  style={{
-                    tintColor: "#fcc245",
-                  }}
-                />
-              ) : (
-                <Image
-                  source={require("../../assets/images/checkmark.png")}
-                  className={` w-30 h-30 my-3`}
-                  style={{
-                    tintColor: "#43a25a",
-                  }}
-                />
-              )}
-              <Text
-                className={`${isDark ? "text-appwhite" : "text-appblack"} text-center text-xl font-semibold`}
-              >
-                {bookingResult}
-              </Text>
-            </View>
           </ScrollView>
         </LiquidGlassView>
       );
@@ -782,9 +751,12 @@ const Guidance = () => {
       ) : (
         <></>
       )}
-      <View className={`flex-row items-center justify-between mt-18`}>
+      <View
+        className={`flex-row items-center justify-between`}
+        style={{ marginTop: headerTopMargin }}
+      >
         <Text
-          className={`text-5xl font-semibold ${isDark ? "text-appwhite" : "text-appblack"}`}
+          className={`text-5xl font-semibold leading-[55px] ${isDark ? "text-appwhite" : "text-appblack"}`}
         >
           Guidance
         </Text>
@@ -797,8 +769,8 @@ const Guidance = () => {
             disabled={isLoading}
             contentStyle={{
               borderRadius: 12,
-              paddingHorizontal: 12,
-              paddingVertical: 8,
+              width: HEADER_ACTION_BUTTON_SIZE,
+              height: HEADER_ACTION_BUTTON_SIZE - 5,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -806,9 +778,11 @@ const Guidance = () => {
             fallbackBackgroundColor={activeTone.accent}
           >
             <Image
-              source={require("../../assets/images/upcoming-calendar-icon.png")}
-              className={`w-7 h-8`}
+              source={require("../../assets/images/calendar.png")}
               style={{
+                width: HEADER_ACTION_ICON_SIZE,
+                height: HEADER_ACTION_ICON_SIZE,
+                resizeMode: "contain",
                 tintColor: isDark ? "#111113" : "#fbfbfb",
               }}
             />
@@ -816,16 +790,11 @@ const Guidance = () => {
         </View>
       </View>
       {isLandscape ? (
-        <View className="flex-1 flex-row gap-4 mt-4 pb-4">
-          <View
-            className="self-stretch mb-4"
-            style={{
-              width: Math.min(Math.max(width * 0.32, 280), 360),
-            }}
-          >
+        <View className="flex-1 flex-row gap-4 mt-4 mb-1">
+          <View className="self-stretch mb-4" style={{ flex: 1 }}>
             {renderLandscapeSidebar()}
           </View>
-          <View className="flex-1">{renderGuidanceContent()}</View>
+          <View style={{ flex: 2 }}>{renderGuidanceContent()}</View>
         </View>
       ) : (
         <>

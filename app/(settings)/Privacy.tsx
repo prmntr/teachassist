@@ -3,7 +3,8 @@ import * as Haptics from "expo-haptics";
 import * as LocalAuthentication from "expo-local-authentication";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { Alert, Image, ScrollView, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, TouchableOpacity, View } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import {
   getBiometricLockEnabled,
   setBiometricLockEnabled as persistBiometricLockEnabled,
@@ -55,9 +56,10 @@ const PrivacyScreen = () => {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) {
-        Alert.alert(
+        AppAlert.alert(
           "Biometrics Unavailable",
           "Set up Face ID, Touch ID, or a fingerprint in your device settings to enable app lock.",
+          { icon: AlertIcon.lock },
         );
         return;
       }
@@ -127,7 +129,7 @@ const PrivacyScreen = () => {
                   </Text>
                 </View>
                 <Image
-                  source={require("../../../assets/images/arrow-icon.png")}
+                  source={require("../../assets/images/arrow-icon.png")}
                   className="w-6 h-6 mr-2"
                   style={{ tintColor: isDark ? "#edebea" : "#2f3035" }}
                 />

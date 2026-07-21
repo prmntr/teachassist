@@ -86,7 +86,7 @@ const LegalScreen = () => {
                       </Text>
                       {item.kind === "external" && (
                         <Image
-                          source={require("../../../assets/images/external-link.png")}
+                          source={require("../../assets/images/external-link.png")}
                           style={{ tintColor: activeTone.accent }}
                           className="w-5 h-5 ml-2"
                         />

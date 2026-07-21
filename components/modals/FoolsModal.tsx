@@ -41,8 +41,9 @@ const FoolsModal: React.FC<FoolsModalProps> = ({ visible, onClose }) => {
                 <Text
                   className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-base mt-2`}
                 >
-                  in honor of the invention of burgers and mustard, small changes
-                  have been made to the teachassist app for a limited time
+                  in honor of the invention of burgers and mustard, small
+                  changes have been made to the teachassist app for a limited
+                  time
                   {`\n\n`}
                   check them out in the settings panel
                 </Text>
@@ -58,7 +59,11 @@ const FoolsModal: React.FC<FoolsModalProps> = ({ visible, onClose }) => {
                 onClose();
               }}
             >
-              <Text className="text-white text-lg font-semibold">Embrace</Text>
+              <Text
+                className={`${isDark ? "text-appblack" : "text-appwhite"} text-lg font-semibold`}
+              >
+                Embrace
+              </Text>
             </TouchableOpacity>
           </View>
         </View>

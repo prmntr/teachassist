@@ -91,7 +91,7 @@ const SignInScreen = () => {
       <LiquidGlassButton
         containerStyle={{
           position: "absolute",
-          top: 56,
+          top: 60,
           right: 20,
           zIndex: 50,
         }}
@@ -103,14 +103,6 @@ const SignInScreen = () => {
           paddingVertical: liquidGlassEnabled ? 0 : 10,
           alignItems: "center",
           justifyContent: "center",
-          shadowColor: "#000",
-          shadowOpacity: isDark ? 0.18 : 0.1,
-          shadowRadius: 8,
-          shadowOffset: {
-            width: 0,
-            height: 4,
-          },
-          elevation: 4,
         }}
         glassTintColor={activeTone.bg4}
         fallbackBackgroundColor={activeTone.bg4}

@@ -1,16 +1,21 @@
-﻿import * as Haptics from "expo-haptics";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
+import * as Device from "expo-device";
+import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   NativeSyntheticEvent,
   Platform,
   ScrollView,
+  Share,
   TextInputSubmitEditingEventData,
   TouchableOpacity,
   useColorScheme,
   View,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
+import { appVersionLabel } from "@/utils/appVersion";
 import { SecureStorage } from "../(auth)/taauth";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
 import AppToggle from "@/components/ui/AppToggle";
@@ -23,6 +28,8 @@ import {
   saveNotificationSetting,
   syncBackgroundTasks,
 } from "@/utils/notifications";
+import { clearCourseReportMemoryCache } from "@/utils/courseReportCache";
+import { clearCoursesMemoryCache } from "@/utils/coursesMemoryCache";
 import {
   DEFAULT_TEACHASSIST_SERVER_ORIGIN,
   getTeachAssistServerOrigin,
@@ -67,6 +74,8 @@ const clearServerDependentCache = async () => {
     SecureStorage.delete("ta_appointments"),
     SecureStorage.delete("marks_last_retrieved"),
   ]);
+  clearCoursesMemoryCache();
+  clearCourseReportMemoryCache();
 };
 
 const PersonalizationAdvancedScreen = () => {
@@ -133,11 +142,11 @@ const PersonalizationAdvancedScreen = () => {
       submittedCode === "a secret code" ||
       submittedCode === "A secret code"
     ) {
-      Alert.alert("You're not funny", "burger");
+      AppAlert.alert("You're not funny", "burger");
       return;
     }
     if (submittedCode !== "island") {
-      Alert.alert(
+      AppAlert.alert(
         "The hum of incandescent lights grows louder.",
         "You feel something's changed.",
       );
@@ -149,7 +158,7 @@ const PersonalizationAdvancedScreen = () => {
     await setAFoolOverrideEnabled(nextValue);
     setAprilFoolsCode("");
 
-    Alert.alert(
+    AppAlert.alert(
       nextValue ? "You're a fool!" : "Not a fool",
       nextValue ? "Check your settings page..." : "Toggle off.",
     );
@@ -166,17 +175,18 @@ const PersonalizationAdvancedScreen = () => {
     setServerValue(normalizedServer);
     hapticsNotification(Haptics.NotificationFeedbackType.Success);
 
-    Alert.alert(
+    AppAlert.alert(
       "Server Updated",
-      "Session and course cache SUCESSFULLY CLEARED to allow clean connection.",
+      "Session and course cache have been cleared to allow clean connection.",
       [
         {
-          text: "OK",
+          text: "Got it!",
           onPress: () => {
             router.replace("/");
           },
         },
       ],
+      { icon: AlertIcon.success },
     );
   };
 
@@ -258,16 +268,23 @@ const PersonalizationAdvancedScreen = () => {
                 }`}
               >
                 <View className="flex-1 pr-3">
-                  <Text
-                    className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-semibold`}
-                  >
-                    Use Liquid Glass (experimental)
-                  </Text>
+                  <View className="flex-row items-center">
+                    <Text
+                      className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-semibold`}
+                    >
+                      Use Liquid Glass
+                    </Text>
+                    <View className="ml-2 flex items-center justify-center">
+                      <Text className="bg-info rounded-full px-3  font-semibold flex items-center justify-center text-appwhite">
+                        Beta
+                      </Text>
+                    </View>
+                  </View>
                   <Text
                     className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm mt-1`}
                   >
                     {isAndroid
-                      ? "Downgrade to an iOS device to enable liquid glass. Trust me, you're not missing much."
+                      ? "Liquid glass is not available on Android."
                       : showLiquidGlassAppearanceWarning
                         ? "Enable some liquid glass features in iOS and iPadOS. Report bugs in the support tab. If your device stays in Light Mode while the app is in Dark Mode, things might look weird. Turn on Dark Mode on your device to fix it."
                         : "Enable some liquid glass features in iOS and iPadOS. Report bugs in the support tab."}
@@ -339,11 +356,12 @@ const PersonalizationAdvancedScreen = () => {
                         hapticsImpact(Haptics.ImpactFeedbackStyle.Medium);
                         await saveServer(serverValue);
                       } catch (error) {
-                        Alert.alert(
+                        AppAlert.alert(
                           "Invalid Server",
                           error instanceof Error
                             ? error.message
                             : "Enter a valid server host.",
+                          { icon: AlertIcon.error },
                         );
                       }
                     }}
@@ -383,6 +401,105 @@ const PersonalizationAdvancedScreen = () => {
             </LiquidGlassView>
           </View>
           <View className="mt-6">
+            <Text className="text-2xl font-bold text-baccent mb-4">Debug</Text>
+            <LiquidGlassView
+              className="rounded-2xl overflow-hidden"
+              fallbackBackgroundColor={activeTone.bg3}
+              glassTintColor={activeTone.bg2}
+              glassEffectStyle="clear"
+            >
+              <View className="px-4 py-4">
+                <Text
+                  className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-semibold`}
+                >
+                  Share Device & App Info
+                </Text>
+                <Text
+                  className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm mt-1 mb-3`}
+                >
+                  Share a snapshot of app state and device details to help
+                  diagnose issues.
+                </Text>
+                <LiquidGlassButton
+                  contentStyle={{
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 12,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  glassTintColor={activeTone.accent}
+                  fallbackBackgroundColor={activeTone.accent}
+                  onPress={async () => {
+                    hapticsImpact(Haptics.ImpactFeedbackStyle.Light);
+                    const [
+                      marksLastRetrieved,
+                      lastAuthTime,
+                      schoolName,
+                      customServer,
+                      notifsEnabled,
+                      hideUnavailable,
+                      tapToReveal,
+                      messagesMode,
+                      hapticsEnabled,
+                    ] = await Promise.all([
+                      SecureStorage.load("marks_last_retrieved"),
+                      SecureStorage.load("ta_last_auth_time"),
+                      SecureStorage.load("school_name"),
+                      AsyncStorage.getItem("custom_teachassist_server"),
+                      AsyncStorage.getItem("notif_marks_enabled"),
+                      AsyncStorage.getItem("hide_unavailable_marks"),
+                      AsyncStorage.getItem("tap_to_reveal_marks"),
+                      AsyncStorage.getItem("messages_mode"),
+                      AsyncStorage.getItem("haptics_enabled"),
+                    ]);
+
+                    const fmtDate = (raw: string | null) => {
+                      if (!raw) return "never";
+                      const ms = /^\d+$/.test(raw)
+                        ? parseInt(raw, 10)
+                        : new Date(raw).getTime();
+                      return isNaN(ms) ? raw : Math.floor(ms / 1000).toString();
+                    };
+
+                    const debugInfo = [
+                      `teachassist Debug Info`,
+                      `─────────────────────`,
+                      `ta ${appVersionLabel}, Build #${Constants.nativeBuildVersion ?? "YYZ"})`,
+                      `${Platform.OS === "ios" ? "iOS" : "Android"} ${Platform.Version}`,
+                      `${Device.brand ?? "?"} ${Device.modelName ?? "?"}`,
+                      `${Device.osName ?? "?"} ${Device.osVersion ?? "?"}`,
+                      ``,
+                      `RPCORIGIN = ${customServer ?? DEFAULT_TEACHASSIST_SERVER_ORIGIN}`,
+                      `REFRESH = ${fmtDate(marksLastRetrieved)}`,
+                      `LAUTH = ${fmtDate(lastAuthTime)}`,
+                      `NE = ${notifsEnabled ?? "false"}`,
+                      `HU = ${hideUnavailable ?? "false"}`,
+                      `ToR = ${tapToReveal ?? "false"}`,
+                      `MM = ${messagesMode ?? "default"}`,
+                      `BB = ${hapticsEnabled ?? "true"}`,
+                    ].join("\n");
+
+                    try {
+                      await Share.share({ message: debugInfo });
+                    } catch {
+                      AppAlert.alert("Failed to share debug info.", undefined, {
+                        icon: AlertIcon.error,
+                      });
+                    }
+                  }}
+                >
+                  <Text
+                    className={`text-center font-semibold ${isDark ? "text-appblack" : "text-appwhite"}`}
+                  >
+                    Share Debug Info
+                  </Text>
+                </LiquidGlassButton>
+              </View>
+            </LiquidGlassView>
+          </View>
+
+          <View className="mt-6">
             <LiquidGlassView
               className=" rounded-2xl overflow-hidden"
               fallbackBackgroundColor={activeTone.bg3}
@@ -409,7 +526,7 @@ const PersonalizationAdvancedScreen = () => {
                 <Text
                   className={`${isDark ? "text-appgraylight" : "text-appgraydark"} text-sm ${afoolOverrideEnabled ? "pb-4 pt-2" : ""}`}
                 >
-                  {afoolOverrideEnabled ? "enabled, have fun" : ""}
+                  {afoolOverrideEnabled ? `enabled, have fun\n(to turn off, type the secret code again)` : ""}
                 </Text>
               </View>
             </LiquidGlassView>

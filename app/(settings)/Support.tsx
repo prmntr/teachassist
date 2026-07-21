@@ -11,6 +11,7 @@ import {
 import { SecureStorage } from "../(auth)/taauth";
 import { appVersionLabel } from "@/utils/appVersion";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
+import { openWriteReview } from "@/utils/storeReview";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/AppText";
 import BackButton from "@/components/ui/Back";
@@ -70,21 +71,31 @@ const SupportScreen = () => {
               {
                 title: "Get Support and Send Feedback",
                 subtitle: "Help improve the TeachAssist app",
-                icon: require("../../../assets/images/support-icon.png"),
+                icon: require("../../assets/images/support-icon.png"),
+                kind: "external",
                 action: () =>
                   Linking.openURL("https://forms.gle/3g7D72cFJUYYH9Fh8"),
               },
               {
                 title: "Update Log",
                 subtitle: "See what's new in the app",
-                icon: require("../../../assets/images/update.png"),
+                icon: require("../../assets/images/update.png"),
+                kind: "internal",
                 action: () => setShowUpdates(true),
               },
               {
                 title: "TeachAssist Website",
                 subtitle: "Visit the TeachAssist Website",
-                icon: require("../../../assets/images/star.png"),
+                icon: require("../../assets/images/link-chain.png"),
+                kind: "external",
                 action: () => Linking.openURL("https://prmntr.com/teachassist"),
+              },
+              {
+                title: "Rate the App",
+                subtitle: "Leave a review for teachassist 😋",
+                icon: require("../../assets/images/star.png"),
+                kind: "external",
+                action: () => openWriteReview(),
               },
             ].map((item, index) => (
               <View key={item.title}>
@@ -106,11 +117,20 @@ const SupportScreen = () => {
                       />
                     </View>
                     <View className="flex-1">
-                      <Text
-                        className={`${isDark ? "text-appwhite" : "text-appblack"} text-base font-semibold`}
-                      >
-                        {item.title}
-                      </Text>
+                      <View className="flex-row">
+                        <Text
+                          className={`${isDark ? "text-appwhite" : "text-appblack"}`}
+                        >
+                          {item.title}
+                        </Text>
+                        {item.kind === "external" && (
+                          <Image
+                            source={require("../../assets/images/external-link.png")}
+                            style={{ tintColor: activeTone.accent }}
+                            className="w-5 h-5 ml-2"
+                          />
+                        )}
+                      </View>
                       <Text
                         className={`${isDark ? "text-appwhite" : "text-appblack"}/60 text-sm mt-1`}
                       >
@@ -119,7 +139,7 @@ const SupportScreen = () => {
                     </View>
                   </View>
                 </TouchableOpacity>
-                {index < 2 ? (
+                {index < 3 ? (
                   <View
                     className={`${isDark ? "bg-dark4" : "bg-light4"} h-px mx-4`}
                   />

@@ -2,7 +2,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useState } from "react";
 import {
-  Alert,
   Image,
   ImageBackground,
   LayoutChangeEvent,
@@ -10,6 +9,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
 import { SecureStorage } from "../(auth)/taauth";
 import { hapticsImpact } from "@/utils/haptics";
 import { useTheme } from "@/contexts/ThemeContext";
@@ -61,7 +61,11 @@ const StudentIDScreen = () => {
 
     const imageUri = result.assets[0]?.uri;
     if (!imageUri) {
-      Alert.alert("Unable to load image", "Try choosing a different photo.");
+      AppAlert.alert(
+        "Unable to load image",
+        "Try choosing a different photo.",
+        { icon: AlertIcon.error },
+      );
       return;
     }
 
@@ -71,7 +75,7 @@ const StudentIDScreen = () => {
 
   const removeStudentIdImage = async () => {
     await hapticsImpact(Haptics.ImpactFeedbackStyle.Light);
-    Alert.alert(
+    AppAlert.alert(
       "Remove Student ID",
       "Are you sure you want to delete your student ID?",
       [
@@ -85,6 +89,7 @@ const StudentIDScreen = () => {
           },
         },
       ],
+      { icon: AlertIcon.delete },
     );
   };
 

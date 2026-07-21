@@ -407,6 +407,7 @@ const GradeUpdatesScreen = () => {
                 backgroundColor: activeTone.bg4,
                 borderColor: activeTone.bg4,
                 borderRadius: 8,
+                overflow: "hidden",
               },
             ]}
             activeColor={`${activeTone.accent}85`}
@@ -437,24 +438,25 @@ const GradeUpdatesScreen = () => {
 
   const renderEmptyState = () => (
     <LiquidGlassView
-      className={`${isDark ? "bg-dark3" : "bg-light3"} mt-6 rounded-xl p-5`}
+      containerClassName="flex-1 mt-6 mb-2"
+      className={`${isDark ? "bg-dark3" : "bg-light3"} flex-1 rounded-xl p-5`}
       fallbackBackgroundColor={activeTone.bg3}
-      glassTintColor={activeTone.bg2}
+      glassTintColor={activeTone.bg3}
       glassEffectStyle="clear"
     >
-      <View className="items-center justify-center px-8 py-12">
+      <View className="flex-1 items-center justify-center px-8 py-12">
         <Image
-          source={require("../../assets/images/not_found.png")}
-          className="w-30 h-30 mb-3"
+          source={require("../assets/images/not_found.png")}
+          className="w-25 h-25 mb-3"
           style={{ tintColor: activeTone.accent }}
         />
         <Text
           className={`${isDark ? "text-light3" : "text-dark3"} text-xl font-semibold text-center mb-2`}
         >
-          No updates
+          No updates yet
         </Text>
         <Text className="text-gray-400 text-center text-lg leading-6">
-          No grade changes match this filter.
+          No grade changes match the current filter.
         </Text>
       </View>
     </LiquidGlassView>
@@ -647,7 +649,7 @@ const GradeUpdatesScreen = () => {
           ) : null
         }
         className="px-5"
-        contentContainerStyle={{ paddingTop: 118, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingTop: 118, paddingBottom: 40, flexGrow: 1 }}
         initialNumToRender={8}
         maxToRenderPerBatch={8}
         windowSize={7}
@@ -683,32 +685,25 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   dropdownItem: {
-    flex: 1,
     justifyContent: "center",
-    margin: 7,
+    paddingHorizontal: 12, // Use padding instead of margin
+    paddingVertical: 10, 
   },
   dropdownItemDark: {
     color: "#edebea",
     fontSize: 13,
     fontWeight: "600",
-    marginVertical: 3,
-    marginHorizontal: 2,
-    borderRadius: 0,
   },
   dropdownItemLight: {
     color: "#2f3035",
     fontSize: 13,
     fontWeight: "600",
-    marginVertical: 3,
-    marginHorizontal: 2,
-    borderRadius: 0,
   },
   dropdownMenuDark: {
     padding: 1,
     borderRadius: 0,
   },
   dropdownMenuLight: {
-    backgroundColor: "#e7e7e9",
     borderRadius: 0,
   },
 });

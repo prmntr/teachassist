@@ -1,7 +1,8 @@
 ﻿import * as Haptics from "expo-haptics";
 import { useEffect, useState } from "react";
-import { Alert, ScrollView, TouchableOpacity, View } from "react-native";
-import { SecureStorage, type AppointmentFormData } from "../(auth)/taauth";
+import { ScrollView, TouchableOpacity, View } from "react-native";
+import { AppAlert, AlertIcon } from "@/components/ui/AppAlert";
+import { SecureStorage, type AppointmentFormData } from "@/app/(auth)/taauth";
 import { hapticsImpact, hapticsNotification } from "@/utils/haptics";
 import { useTheme } from "@/contexts/ThemeContext";
 import Text from "@/components/ui/AppText";
@@ -94,7 +95,11 @@ const AppointmentReasonForm: React.FC<AppointmentReasonFormProps> = ({
 
   const handleSubmit = () => {
     if (!selectedReason) {
-      Alert.alert("Error", "Please select a reason for your appointment.");
+      AppAlert.alert(
+        "Error",
+        "Please select a reason for your appointment.",
+        { icon: AlertIcon.error },
+      );
       return;
     }
 
