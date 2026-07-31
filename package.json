@@ -21,7 +21,7 @@
     "@react-navigation/native": "^7.1.6",
     "@shopify/react-native-skia": "2.2.12",
     "axios": "^1.11.0",
-    "expo": "^54",
+    "expo": "^57",
     "expo-background-task": "~1.0.0",
     "expo-blur": "~15.0.8",
     "expo-constants": "~18.0.11",
